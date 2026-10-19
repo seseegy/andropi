@@ -1,6 +1,7 @@
 package com.imtaqin.andropi
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -17,6 +18,7 @@ class AgentService : Service() {
     companion object {
         private const val ID = 1
         private var active = false
+        private var stoppable = false
 
         /**
          * [stoppable]: the agent itself is working (not just background tasks), so the notification offers Stop.
@@ -34,38 +36,51 @@ class AgentService : Service() {
                 .putExtra("title", title)
                 .putExtra("stoppable", stoppable)
             active = on
+            this.stoppable = stoppable
             if (on) context.startForegroundService(intent)
             else context.stopService(intent)
         }
 
-        /** Refreshes the ongoing notification while it is shown (current chat and tool). */
+        /**
+         * Refreshes the ongoing notification (current chat and tool). Posted straight to the notification manager:
+         * starting the service again from the background is not allowed on Android 12+.
+         */
         fun update(context: Context, title: String?, text: String?) {
-            if (active) setActive(context, true, text, title, stoppable = true)
+            if (!active) return
+            context.getSystemService(NotificationManager::class.java)
+                .notify(ID, build(context, title, text, stoppable))
+        }
+
+        private fun build(context: Context, title: String?, text: String?, stoppable: Boolean): Notification {
+            Notifications.ensureChannels(context)
+            val builder = Notification.Builder(context, Notifications.ACTIVITY)
+                .setSmallIcon(R.drawable.ic_stat_agent)
+                .setContentTitle(title ?: "AndroPI")
+                .setContentText(text ?: Notifications.t(context, "Agent is working", "Agent sedang bekerja"))
+                .setContentIntent(Notifications.openIntent(context, 0, mapOf("action" to "open_chat")))
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+            if (stoppable) {
+                val stop = PendingIntent.getBroadcast(
+                    context, 0, Intent(context, StopReceiver::class.java), PendingIntent.FLAG_IMMUTABLE,
+                )
+                builder.addAction(
+                    Notification.Action.Builder(null, Notifications.t(context, "Stop", "Hentikan"), stop).build()
+                )
+            }
+            return builder.build()
         }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Notifications.ensureChannels(this)
-        val stop = PendingIntent.getBroadcast(
-            this, 0, Intent(this, StopReceiver::class.java), PendingIntent.FLAG_IMMUTABLE,
+        val notification = build(
+            this,
+            intent?.getStringExtra("title"),
+            intent?.getStringExtra("text"),
+            intent?.getBooleanExtra("stoppable", false) == true,
         )
-        val builder = Notification.Builder(this, Notifications.ACTIVITY)
-            .setSmallIcon(R.drawable.ic_stat_agent)
-            .setContentTitle(intent?.getStringExtra("title") ?: "AndroPI")
-            .setContentText(
-                intent?.getStringExtra("text") ?: Notifications.t(this, "Agent is working", "Agent sedang bekerja")
-            )
-            .setContentIntent(Notifications.openIntent(this, 0, mapOf("action" to "open_chat")))
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-        if (intent?.getBooleanExtra("stoppable", false) == true) {
-            builder.addAction(
-                Notification.Action.Builder(null, Notifications.t(this, "Stop", "Hentikan"), stop).build()
-            )
-        }
-        val notification = builder.build()
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
+
+import 'drafts.dart';
 
 /// Talks to the pi agent host (agent/src/host.ts) running as a Node child
 /// process. Commands and records are JSONL; see the host for the protocol.
@@ -31,6 +34,9 @@ class AgentClient {
     _ready = Completer<void>();
     final result = await _method.invokeMethod<Map>('start');
     paths = result?.cast<String, String>() ?? const {};
+    // The real files directory (it differs from /data/data under a work profile or a second user).
+    final home = paths['home'];
+    if (home != null) Drafts.root = File(home).parent.path;
     return _ready!.future.timeout(const Duration(seconds: 60));
   }
 

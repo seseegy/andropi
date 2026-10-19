@@ -167,8 +167,11 @@ async function buildSession(sessionManager: SessionManager, opts: { interactive:
 	return result;
 }
 
-let lastUserText = "";
+/** The last prompt sent from the app until it reaches the history, so Try again can send it once more. */
+let lastPrompt: { text: string; images?: any[]; sessionId: string } | null = null;
 let fallbackTried = false;
+/** A fallback model is about to continue the failed turn; the turn is not over for the app's purposes. */
+let fallbackPending = false;
 
 async function openSession(sessionManager: SessionManager) {
 	unsubscribe?.();
@@ -186,16 +189,32 @@ async function openSession(sessionManager: SessionManager) {
 
 /** Hooks on the active chat: model fallback and "done" notifications. */
 function onSessionEvent(event: AgentSessionEvent) {
+	if (event.type === "message_start" && lastPrompt) {
+		const m = (event as any).message;
+		if (m?.role === "user" && messageText(m).includes(lastPrompt.text)) lastPrompt = null;
+	}
 	if (event.type === "message_end") {
 		const m = (event as any).message;
 		if (m?.role === "assistant" && m.stopReason === "error") void tryFallback(String(m.errorMessage ?? ""));
 	}
 	if (event.type === "agent_end" || (event as any).type === "agent_settled") {
 		const text = session?.getLastAssistantText?.() ?? "";
-		send({ type: "agent_done", sessionFile: session?.sessionFile ?? null, preview: text.slice(0, 200) });
+		send({
+			type: "agent_done",
+			sessionFile: session?.sessionFile ?? null,
+			preview: text.slice(0, 200),
+			// A fallback model is taking over (or already running): not finished, and not failed.
+			retrying: fallbackPending || !!session?.isStreaming,
+		});
 		// Sync a little after the turn, so a quick follow-up doesn't cause two pushes.
 		sync?.schedule(90_000);
 	}
+}
+
+function messageText(m: any): string {
+	return typeof m?.content === "string"
+		? m.content
+		: (m?.content ?? []).map((c: any) => (c.type === "text" ? c.text : "")).join("");
 }
 
 async function tryFallback(error: string) {
@@ -207,10 +226,15 @@ async function tryFallback(error: string) {
 	const model = next && modelRuntime.getModel(next.provider, next.model);
 	if (!model) return;
 	fallbackTried = true;
-	await session.setModel(model, { persist: false });
-	send({ type: "notice", message: `Switched to ${model.name ?? model.id} after an error: ${error.slice(0, 120)}` });
-	send({ type: "state", state: state() });
-	session.prompt("Continue where you left off (the previous model failed).").catch(() => {});
+	fallbackPending = true;
+	try {
+		await session.setModel(model, { persist: false });
+		send({ type: "notice", message: `Switched to ${model.name ?? model.id} after an error: ${error.slice(0, 120)}` });
+		send({ type: "state", state: state() });
+		session.prompt("Continue where you left off (the previous model failed).").catch(() => {});
+	} finally {
+		fallbackPending = false;
+	}
 }
 
 /** Refuses new work once today's spend reaches the configured cap. */
@@ -504,8 +528,9 @@ async function handle(cmd: Command): Promise<unknown> {
 			return state();
 
 		case "prompt": {
+			// Remembered before anything can refuse it, so Try again knows what was asked.
+			lastPrompt = { text: cmd.text, images: cmd.images, sessionId: s.sessionId };
 			checkBudget();
-			lastUserText = cmd.text;
 			fallbackTried = false;
 			// Plan mode: ask for a plan first; tools that change things are blocked (guard.ts).
 			const text = guard.planMode
@@ -522,12 +547,22 @@ async function handle(cmd: Command): Promise<unknown> {
 			// After a failed turn: continue it if the request made it into the history, else send the prompt again.
 			if (s.isStreaming) throw new Error("The agent is still working");
 			checkBudget();
-			const last = s.messages.at(-1) as any;
+			const last = (s.messages as any[]).at(-1);
 			const failedTurn = last && (last.role === "user" || (last.role === "assistant" && last.stopReason === "error"));
-			const text = failedTurn ? "Continue where you left off (the previous request failed)." : lastUserText;
-			if (!text) throw new Error("Nothing to retry");
+			// The last prompt from this chat that never made it into the history (refused, or failed to start).
+			const unsent = lastPrompt && lastPrompt.sessionId === s.sessionId ? lastPrompt : null;
 			fallbackTried = false;
-			s.prompt(text).catch((e) => send({ type: "error", message: String(e?.message ?? e) }));
+			if (unsent) {
+				s.prompt(unsent.text, { images: unsent.images }).catch((e) =>
+					send({ type: "error", message: String(e?.message ?? e) }),
+				);
+			} else if (failedTurn) {
+				s.prompt("Continue where you left off (the previous request failed).").catch((e) =>
+					send({ type: "error", message: String(e?.message ?? e) }),
+				);
+			} else {
+				throw new Error("Nothing to retry");
+			}
 			return null;
 		}
 		case "steer":

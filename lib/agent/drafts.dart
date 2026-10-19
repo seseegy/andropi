@@ -12,7 +12,8 @@ class Drafts {
   Drafts._();
   static final instance = Drafts._();
 
-  /// The app's files directory; tests point it elsewhere.
+  /// The app's files directory: set from the platform when the agent starts (AgentClient.start); tests point it
+  /// elsewhere. The default only matters before that.
   static String root = '/data/data/com.imtaqin.andropi/files';
   static const _max = 50;
 

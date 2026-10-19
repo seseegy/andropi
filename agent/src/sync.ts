@@ -14,7 +14,18 @@
  * phone.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	cpSync,
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { type Integrations, run } from "./integrations.js";
 import type { CustomProviders } from "./providers.js";
@@ -71,15 +82,66 @@ interface State {
 
 const exists = (p: string) => existsSync(p);
 
-function walk(dir: string, base = dir, out: string[] = []): string[] {
+/** A project folder name that stays inside the workspace. */
+const safeName = (name: unknown): name is string =>
+	typeof name === "string" && /^[^/\\]+$/.test(name) && !name.startsWith(".");
+/** A remote another phone can clone; never something git would read as an option. */
+const safeRemote = (url: unknown): url is string => typeof url === "string" && /^(https:\/\/|ssh:\/\/|git@)\S+$/.test(url);
+const safeBranch = (b: unknown): b is string => typeof b === "string" && /^[\w.\/-]+$/.test(b) && !b.startsWith("-");
+/** Credentials someone put into a remote URL must not land in the sync repository. */
+const withoutCredentials = (url: string) => url.replace(/^(https?:\/\/)[^@/]+@/, "$1");
+
+/** Files under [dir], relative to it. Symlinks are skipped: they may dangle, loop, or point outside. */
+function walk(dir: string, skipDirs?: Set<string>, base = dir, out: string[] = []): string[] {
 	if (!exists(dir)) return out;
 	for (const name of readdirSync(dir)) {
 		const p = join(dir, name);
-		const st = statSync(p);
-		if (st.isDirectory()) walk(p, base, out);
-		else out.push(relative(base, p));
+		const st = lstatSync(p);
+		if (st.isSymbolicLink()) continue;
+		if (st.isDirectory()) {
+			if (!skipDirs?.has(name)) walk(p, skipDirs, base, out);
+		} else if (st.isFile()) {
+			out.push(relative(base, p));
+		}
 	}
 	return out;
+}
+
+/**
+ * Makes [dst] a copy of [src], copying only files that changed and removing ones gone from [src]. Files over
+ * GitHub's limit are left out and reported through [onTooBig]; [keep] names files in [dst] to leave as they are.
+ * Returns the relative paths now in [dst].
+ */
+function mirrorTree(
+	src: string,
+	dst: string,
+	opts: { skipDirs?: Set<string>; only?: (rel: string) => boolean; keep?: Set<string>; onTooBig: (rel: string) => void },
+): string[] {
+	const kept = new Set<string>();
+	for (const rel of walk(src, opts.skipDirs)) {
+		if (opts.only && !opts.only(rel)) continue;
+		if (opts.keep?.has(rel) && exists(join(dst, rel))) {
+			kept.add(rel);
+			continue;
+		}
+		const from = lstatSync(join(src, rel));
+		if (from.size > MAX_FILE) {
+			opts.onTooBig(rel);
+			continue;
+		}
+		const to = join(dst, rel);
+		const old = exists(to) ? lstatSync(to) : null;
+		if (!old || !old.isFile() || old.size !== from.size || from.mtimeMs > old.mtimeMs) {
+			if (old && !old.isFile()) rmSync(to, { recursive: true, force: true });
+			mkdirSync(dirname(to), { recursive: true });
+			copyFileSync(join(src, rel), to);
+		}
+		kept.add(rel);
+	}
+	for (const rel of walk(dst)) {
+		if (!kept.has(rel)) rmSync(join(dst, rel), { force: true });
+	}
+	return [...kept];
 }
 
 export class GitHubSync {
@@ -89,7 +151,10 @@ export class GitHubSync {
 	private running = false;
 	private again = false;
 	private timer: NodeJS.Timeout | undefined;
+	private due = 0;
 	private repo: string | null = null;
+	/** The open chat grew on another phone: leave the longer copy in the repository until it can be pulled. */
+	private keepRemote = new Set<string>();
 
 	constructor(private readonly deps: SyncDeps) {
 		this.file = join(deps.stateDir, "sync.json");
@@ -127,16 +192,23 @@ export class GitHubSync {
 		this.state.lastError = null;
 		this.state.failures = 0;
 		this.save();
+		clearTimeout(this.timer);
+		this.timer = undefined;
 		if (on) this.schedule(0);
-		else clearTimeout(this.timer);
 		return this.status();
 	}
 
-	/** Runs a sync after [delayMs]; a sooner request replaces a later one. */
+	/** Runs a sync after [delayMs]; a sooner request replaces a later one, a later one leaves a sooner one alone. */
 	schedule(delayMs: number) {
 		if (!this.state.enabled) return;
+		const at = Date.now() + delayMs;
+		if (this.timer && this.due <= at) return;
 		clearTimeout(this.timer);
-		this.timer = setTimeout(() => void this.syncNow().catch(() => {}), delayMs);
+		this.due = at;
+		this.timer = setTimeout(() => {
+			this.timer = undefined;
+			void this.syncNow().catch(() => {});
+		}, delayMs);
 	}
 
 	async syncNow(): Promise<SyncStatus> {
@@ -239,8 +311,14 @@ export class GitHubSync {
 			await this.git(["commit", "-q", "-m", `Sync ${new Date().toISOString()}`]);
 			try {
 				await this.git(["push", "-q", "origin", `HEAD:${branch}`]);
-			} catch {
-				// Another phone pushed meanwhile: start over from its commit next time round.
+			} catch (e) {
+				// Another phone pushed meanwhile: start over from its commit. Any other failure is reported as is.
+				await this.git(["fetch", "-q", "origin"]).catch(() => "");
+				const behind = await this.git(["rev-list", "--count", `HEAD..origin/${branch}`]).then(
+					(n) => Number(n.trim()) > 0,
+					() => false,
+				);
+				if (!behind) throw e;
 				this.again = true;
 				throw new Error("Another device synced at the same time; trying again");
 			}
@@ -258,6 +336,7 @@ export class GitHubSync {
 		const imported = { chats: 0, projects: 0, config: 0, removed: 0 };
 		const isNew = (key: string, local: string) => !exists(local) && !synced.has(key);
 		const active = this.deps.activeSession();
+		this.keepRemote.clear();
 
 		// Chats deleted on another phone since the last sync. Skipped if the repository has no chats at
 		// all (emptied or reset), so a wiped remote never empties this phone. Projects are never deleted.
@@ -278,8 +357,12 @@ export class GitHubSync {
 			if (!rel.endsWith(".jsonl")) continue;
 			const from = join(this.dir, "sessions", rel);
 			const to = join(agentDir, "sessions", rel);
-			if (active && resolve(to) === resolve(active)) continue;
 			const newer = exists(to) && statSync(from).size > statSync(to).size;
+			if (active && resolve(to) === resolve(active)) {
+				// Never rewritten while open; but don't let this phone's shorter copy replace the longer one either.
+				if (newer) this.keepRemote.add(rel);
+				continue;
+			}
 			if (isNew(`sessions/${rel}`, to) || newer) {
 				mkdirSync(dirname(to), { recursive: true });
 				cpSync(from, to);
@@ -290,9 +373,9 @@ export class GitHubSync {
 		// Projects deleted on another phone: kept here (never deleted automatically) but no longer uploaded,
 		// so they don't come back on the phone that deleted them.
 		const manifest = join(this.dir, "projects.json");
-		const gitProjects: { name: string; remote: string; branch: string | null }[] = exists(manifest)
-			? JSON.parse(readFileSync(manifest, "utf8"))
-			: [];
+		const gitProjects: { name: string; remote: string; branch: string | null }[] = (
+			exists(manifest) ? JSON.parse(readFileSync(manifest, "utf8")) : []
+		).filter((p: any) => safeName(p?.name) && safeRemote(p?.remote));
 		if (exists(manifest)) {
 			const remote = new Set([
 				...(exists(join(this.dir, "projects")) ? readdirSync(join(this.dir, "projects")) : []),
@@ -310,8 +393,11 @@ export class GitHubSync {
 		// Projects uploaded by another phone.
 		for (const name of exists(join(this.dir, "projects")) ? readdirSync(join(this.dir, "projects")) : []) {
 			const to = join(workspace, name);
-			if (!isNew(`projects/${name}`, to)) continue;
-			cpSync(join(this.dir, "projects", name), to, { recursive: true });
+			if (!safeName(name) || !isNew(`projects/${name}`, to)) continue;
+			cpSync(join(this.dir, "projects", name), to, {
+				recursive: true,
+				filter: (src) => !lstatSync(src).isSymbolicLink(),
+			});
 			imported.projects++;
 		}
 
@@ -319,7 +405,7 @@ export class GitHubSync {
 		for (const p of gitProjects) {
 			const to = join(workspace, p.name);
 			if (!isNew(`git/${p.name}`, to)) continue;
-			const args = ["clone", "-q", ...(p.branch ? ["-b", p.branch] : []), p.remote, to];
+			const args = ["clone", "-q", ...(safeBranch(p.branch) ? ["-b", p.branch] : []), "--", p.remote, to];
 			await run("git", args, { cwd: workspace }).then(
 				() => imported.projects++,
 				() => {},
@@ -352,60 +438,61 @@ export class GitHubSync {
 		const { agentDir, workspace } = this.deps;
 		const items: string[] = [];
 		const skipped: string[] = [];
-		const copyTree = (from: string, to: string, label: string) => {
-			cpSync(from, to, {
-				recursive: true,
-				filter: (src) => {
-					const st = statSync(src);
-					if (st.isDirectory()) return !SKIP_DIRS.has(src.split("/").pop()!) || src === from;
-					if (st.size > MAX_FILE) {
-						skipped.push(`${label}/${relative(from, src)}`);
-						return false;
-					}
-					return true;
-				},
-			});
-		};
-		for (const name of ["sessions", "projects", "config", "projects.json"]) rmSync(join(this.dir, name), { recursive: true, force: true });
+		const tooBig = (label: string) => (rel: string) => skipped.push(`${label}/${rel}`);
 
-		for (const rel of walk(join(agentDir, "sessions"))) {
-			if (!rel.endsWith(".jsonl")) continue;
-			mkdirSync(dirname(join(this.dir, "sessions", rel)), { recursive: true });
-			cpSync(join(agentDir, "sessions", rel), join(this.dir, "sessions", rel));
+		for (const rel of mirrorTree(join(agentDir, "sessions"), join(this.dir, "sessions"), {
+			only: (rel) => rel.endsWith(".jsonl"),
+			keep: this.keepRemote,
+			onTooBig: tooBig("chats"),
+		})) {
 			items.push(`sessions/${rel}`);
 		}
 
 		const gitProjects: { name: string; remote: string; branch: string | null }[] = [];
+		const uploaded = new Set<string>();
 		for (const name of exists(workspace) ? readdirSync(workspace) : []) {
 			const dir = join(workspace, name);
-			if (name.startsWith(".") || name === "backups" || !statSync(dir).isDirectory()) continue;
+			if (!safeName(name) || name === "backups" || !lstatSync(dir).isDirectory()) continue;
 			if (this.state.localOnly.includes(name)) continue;
-			const remote = exists(join(dir, ".git"))
+			const origin = exists(join(dir, ".git"))
 				? (await run("git", ["remote", "get-url", "origin"], { cwd: dir }).catch(() => "")).trim()
 				: "";
-			if (remote) {
+			const remote = withoutCredentials(origin);
+			if (safeRemote(remote)) {
 				const branch = (await run("git", ["branch", "--show-current"], { cwd: dir }).catch(() => "")).trim() || null;
 				gitProjects.push({ name, remote, branch });
 				items.push(`git/${name}`);
 			} else {
-				copyTree(dir, join(this.dir, "projects", name), name);
+				// No remote another phone could clone (none, or a local path): upload the files.
+				mirrorTree(dir, join(this.dir, "projects", name), { skipDirs: SKIP_DIRS, onTooBig: tooBig(name) });
+				uploaded.add(name);
 				items.push(`projects/${name}`);
 			}
 		}
+		for (const name of exists(join(this.dir, "projects")) ? readdirSync(join(this.dir, "projects")) : []) {
+			if (!uploaded.has(name)) rmSync(join(this.dir, "projects", name), { recursive: true, force: true });
+		}
 		writeFileSync(join(this.dir, "projects.json"), `${JSON.stringify(gitProjects, null, 1)}\n`);
 
+		const config = new Set<string>(["custom-providers.json"]);
 		for (const entry of CONFIG) {
 			const from = join(agentDir, entry);
-			if (!exists(from)) continue;
+			if (!exists(from) || lstatSync(from).isSymbolicLink()) continue;
 			const to = join(this.dir, "config", entry);
-			if (statSync(from).isDirectory()) {
-				copyTree(from, to, entry);
-				for (const rel of walk(to)) items.push(`config/${entry}/${rel}`);
+			if (lstatSync(from).isDirectory()) {
+				for (const rel of mirrorTree(from, to, { onTooBig: tooBig(entry) })) {
+					config.add(join(entry, rel));
+					items.push(`config/${entry}/${rel}`);
+				}
 			} else {
 				mkdirSync(dirname(to), { recursive: true });
-				cpSync(from, to);
+				copyFileSync(from, to);
+				config.add(entry);
 				items.push(`config/${entry}`);
 			}
+		}
+		for (const rel of walk(join(this.dir, "config"))) {
+			if (!config.has(rel)) rmSync(join(this.dir, "config", rel), { force: true });
 		}
 		// Endpoints and model lists only; keys stay on the phone.
 		const providers = this.deps.providers.list().map(({ hasKey: _hasKey, ...p }) => p);
