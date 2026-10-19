@@ -574,4 +574,5 @@ const _id = <String, String>{
   'Agent is working': 'Agent sedang bekerja',
   'Running': 'Menjalankan',
   'GitHub sync is failing': 'Sinkron GitHub gagal terus',
+  'Select text': 'Pilih teks',
 };

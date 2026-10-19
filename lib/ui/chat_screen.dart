@@ -9,6 +9,7 @@ import '../agent/features.dart';
 import 'i18n.dart';
 import 'chat_extras.dart';
 import 'deploy_sheet.dart';
+import 'message_menu.dart';
 import 'message_views.dart';
 
 import 'package:simple_icons/simple_icons.dart';
@@ -250,42 +251,33 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Long-press on one of your messages: edit & resend, fork, copy.
-  Future<void> _userMenu(UserEntry entry, int userIndex) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: SettingsGroup(
-            children: [
-              SettingsRow(
-                icon: LucideIcons.pencil,
-                color: const Color(0xFF3E63DD),
-                title: tr('Edit & resend'),
-                subtitle: tr('Rewind to this message and change it'),
-                onTap: () => Navigator.pop(context, 'edit'),
-              ),
-              SettingsRow(
-                icon: LucideIcons.gitFork,
-                color: const Color(0xFF7C5CFC),
-                title: tr('Fork from here'),
-                subtitle: tr('A new chat that branches off before this message'),
-                onTap: () => Navigator.pop(context, 'fork'),
-              ),
-              SettingsRow(
-                icon: LucideIcons.copy,
-                color: const Color(0xFF6B6B73),
-                title: tr('Copy'),
-                onTap: () => Navigator.pop(context, 'copy'),
-              ),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _userMenu(BuildContext bubbleContext, UserEntry entry, int userIndex) async {
+    final action = await showMessageMenu(
+      bubbleContext,
+      bubble: UserBubble(entry.text),
+      actions: [
+        MessageAction('copy', tr('Copy'), LucideIcons.copy),
+        MessageAction('select', tr('Select text'), LucideIcons.textCursorInput),
+        MessageAction('edit', tr('Edit & resend'), LucideIcons.pencil),
+        MessageAction('fork', tr('Fork from here'), LucideIcons.gitFork),
+      ],
     );
     if (action == null || !mounted) return;
     if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: entry.text));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Copied'))));
+      return;
+    }
+    if (action == 'select') {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (context) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: SingleChildScrollView(child: SelectableText(entry.text, style: Theme.of(context).textTheme.bodyLarge)),
+        ),
+      );
       return;
     }
     if (agent.busy) {
@@ -445,7 +437,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final child = switch (e) {
           UserEntry() => UserMessageView(
             e,
-            onLongPress: () => _userMenu(e, entries.take(i).whereType<UserEntry>().length),
+            onLongPress: (bubble) => _userMenu(bubble, e, entries.take(i).whereType<UserEntry>().length),
           ),
           AssistantEntry() => AssistantMessageView(e, tools: agent.tools, cwd: agent.cwd, live: agent),
           NoticeEntry() => NoticeView(e),

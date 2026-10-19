@@ -18,35 +18,48 @@ class UserMessageView extends StatelessWidget {
   const UserMessageView(this.entry, {super.key, this.onLongPress});
   final UserEntry entry;
 
-  /// Edit / fork / copy menu, supplied by the chat.
-  final VoidCallback? onLongPress;
+  /// The message menu, supplied by the chat; gets the bubble's own context so the menu can sit next to it.
+  final void Function(BuildContext bubbleContext)? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.82),
+        child: Builder(
+          builder: (bubbleContext) => GestureDetector(
+            onLongPress: onLongPress == null ? null : () => onLongPress!(bubbleContext),
+            child: UserBubble(entry.text),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The user's message bubble; also drawn on its own above the blur when its menu is open.
+class UserBubble extends StatelessWidget {
+  const UserBubble(this.text, {super.key});
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: GestureDetector(
-        onLongPress: onLongPress,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.82),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: p.raised,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-                bottomLeft: Radius.circular(20),
-                bottomRight: Radius.circular(6),
-              ),
-              border: Border.all(color: p.accent.withValues(alpha: 0.18)),
-            ),
-            // Plain text so the long-press menu wins over text selection.
-            child: Text(entry.text, style: Theme.of(context).textTheme.bodyLarge),
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: p.raised,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(6),
         ),
+        border: Border.all(color: p.accent.withValues(alpha: 0.18)),
       ),
+      // Plain text so the long-press menu wins over text selection ("Select text" in the menu covers that).
+      child: Text(text, style: Theme.of(context).textTheme.bodyLarge),
     );
   }
 }
