@@ -23,6 +23,32 @@ class ProviderInfo {
   bool get oauth => json['oauth'] == true;
   List<String> get methods => (json['methods'] as List? ?? const []).cast<String>();
   int get modelCount => json['models'] as int? ?? 0;
+
+  /// Added by the user with a base URL and API key (see agent/src/providers.ts).
+  bool get custom => json['custom'] == true;
+}
+
+/// A user-added endpoint as stored by the host; the API key itself never comes back.
+class CustomProvider {
+  CustomProvider(this.json);
+  final Map<String, dynamic> json;
+
+  String get id => json['id'] as String;
+  String get name => json['name'] as String? ?? id;
+  String get api => json['api'] as String? ?? 'openai-completions';
+  String get baseUrl => json['baseUrl'] as String? ?? '';
+  bool get hasKey => json['hasKey'] == true;
+  List<CustomModel> get models =>
+      (json['models'] as List? ?? const []).map((e) => CustomModel((e as Map).cast<String, dynamic>())).toList();
+}
+
+class CustomModel {
+  CustomModel(this.json);
+  final Map<String, dynamic> json;
+
+  String get id => json['id'] as String;
+  String? get name => json['name'] as String?;
+  int? get contextWindow => (json['contextWindow'] as num?)?.toInt();
 }
 
 class SessionSummary {

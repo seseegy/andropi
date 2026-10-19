@@ -222,6 +222,46 @@ class AgentController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Custom endpoints (base URL + API key) the user added.
+  Future<List<CustomProvider>> customProviders() async =>
+      (await client.call<List>('custom_providers'))
+          .map((e) => CustomProvider((e as Map).cast<String, dynamic>()))
+          .toList();
+
+  /// Adds or updates a custom endpoint; an empty apiKey keeps the saved one.
+  Future<void> saveCustomProvider(Map<String, dynamic> provider) async {
+    await client.call('custom_provider_save', {'provider': provider});
+    await refreshProviders();
+    if (model == null) {
+      _applyState(await client.call<Map<String, dynamic>>('state'));
+      if (model == null && models.isNotEmpty) await setModel(models.first);
+    }
+    notifyListeners();
+  }
+
+  Future<void> deleteCustomProvider(String id) async {
+    await client.call('custom_provider_delete', {'providerId': id});
+    await refreshProviders();
+    _applyState(await client.call<Map<String, dynamic>>('state'));
+    notifyListeners();
+  }
+
+  /// Lists the models an endpoint serves. Without [apiKey], the key saved for [providerId] is used.
+  Future<List<CustomModel>> fetchProviderModels({
+    required String api,
+    required String baseUrl,
+    String apiKey = '',
+    String? providerId,
+  }) async {
+    final list = await client.call<List>('custom_provider_fetch_models', {
+      'api': api,
+      'baseUrl': baseUrl,
+      'apiKey': apiKey,
+      'providerId': ?providerId,
+    });
+    return list.map((e) => CustomModel((e as Map).cast<String, dynamic>())).toList();
+  }
+
   // -------------------------------------------------------------------------
   // Event handling
 

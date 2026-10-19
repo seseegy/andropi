@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../agent/agent_controller.dart';
 import '../agent/models.dart';
+import 'custom_provider_screen.dart';
 import 'login_flow.dart';
 import 'kit.dart';
 import 'theme.dart';
@@ -57,6 +58,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               for (final pr in connected) _ProviderTile(provider: pr, agent: agent),
               const _Header('Add provider'),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                leading: IconTile(icon: LucideIcons.server, color: p.accent, size: 38),
+                title: Text('Custom provider', style: text.titleSmall),
+                subtitle: const Text('Any compatible endpoint: base URL and API key'),
+                trailing: Icon(LucideIcons.plus, size: 18, color: p.faint),
+                onTap: () =>
+                    Navigator.of(context)
+                        .push(MaterialPageRoute<bool>(builder: (_) => CustomProviderScreen(agent: agent))),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: TextField(
@@ -133,7 +144,11 @@ class _ProviderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final subtitle = provider.configured ? (provider.oauth ? 'Signed in' : 'API key') : '${provider.modelCount} models';
+    final subtitle = provider.custom
+        ? 'Custom  ·  ${provider.modelCount} models'
+        : provider.configured
+        ? (provider.oauth ? 'Signed in' : 'API key')
+        : '${provider.modelCount} models';
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: BrandTile(id: provider.id, size: 38),
@@ -147,6 +162,21 @@ class _ProviderTile extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
+    if (provider.custom) {
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      try {
+        final existing = (await agent.customProviders()).firstWhere((c) => c.id == provider.id);
+        await navigator.push(
+          MaterialPageRoute<bool>(
+            builder: (_) => CustomProviderScreen(agent: agent, existing: existing),
+          ),
+        );
+      } catch (e) {
+        messenger.showSnackBar(SnackBar(content: Text('$e')));
+      }
+      return;
+    }
     final methods = provider.methods;
     if (provider.configured) {
       final disconnect = await showModalBottomSheet<bool>(

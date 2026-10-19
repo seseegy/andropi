@@ -20,7 +20,9 @@ Write, run, preview and deploy code without a laptop.</p>
 AndroPI puts the [pi coding agent](https://github.com/earendil-works/pi) on Android. The agent runs locally in a
 bundled Node.js runtime. It reads and writes files, runs shell commands in a real Debian or Alpine container,
 searches the web, and ships your project to GitHub Pages, Vercel or your own server. You bring the model:
-Anthropic, OpenAI, Gemini, OpenRouter and the other providers pi supports.
+Anthropic, OpenAI, Gemini, OpenRouter and the other providers pi supports. Any other OpenAI-, Anthropic- or
+Gemini-compatible endpoint (a proxy, Ollama, LM Studio, vLLM) can be added with its base URL and API key, and the
+app fetches the list of models it serves.
 
 ## Features
 
