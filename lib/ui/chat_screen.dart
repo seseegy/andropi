@@ -89,7 +89,12 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_slashQuery != null && slash == null) _loadSlash();
       setState(() {});
     });
-    attachments.addAll(widget.initialAttachments);
+    if (widget.initialAttachments.isNotEmpty) {
+      attachments.addAll(widget.initialAttachments);
+      _saveFiles();
+    } else {
+      attachments.addAll(_draftFiles());
+    }
     if (widget.listenOnOpen) WidgetsBinding.instance.addPostFrameCallback((_) => _voice());
     // History may have loaded before this screen existed.
     lastCount = agent.entries.length;
@@ -130,10 +135,25 @@ class _ChatScreenState extends State<ChatScreen> {
         text: draft,
         selection: TextSelection.collapsed(offset: draft.length),
       );
+      setState(() {
+        attachments
+          ..clear()
+          ..addAll(_draftFiles());
+      });
     }
     final grew = agent.entries.length != lastCount;
     lastCount = agent.entries.length;
     if (followBottom || grew && agent.entries.lastOrNull is UserEntry) _jumpToBottom();
+  }
+
+  /// The open chat's saved attachments, still on disk.
+  List<Attachment> _draftFiles() => [
+    for (final f in Drafts.instance.files(draftChat)) Attachment(f.path, f.name, mime: f.mime),
+  ];
+
+  /// Keeps the attachments with the draft (copied into app storage, so they survive the picker's cache).
+  void _saveFiles() {
+    Drafts.instance.setFiles(draftChat, [for (final a in attachments) (path: a.path, name: a.name, mime: a.mime)]);
   }
 
   void _jumpToBottom({bool animate = false, int passes = 4}) {
@@ -173,6 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final files = List<Attachment>.of(attachments);
     input.clear();
     setState(() => attachments.clear());
+    _saveFiles();
     followBottom = true;
     if (files.isEmpty) {
       await agent.send(text);
@@ -203,7 +224,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _attach() async {
     final picked = await pickAttachments(context);
-    if (picked.isNotEmpty) setState(() => attachments.addAll(picked));
+    if (picked.isNotEmpty) {
+      setState(() => attachments.addAll(picked));
+      _saveFiles();
+    }
   }
 
   Future<void> _voice() async {
@@ -391,7 +415,10 @@ class _ChatScreenState extends State<ChatScreen> {
               onAttach: _attach,
               onVoice: _voice,
               attachments: attachments,
-              onRemoveAttachment: (a) => setState(() => attachments.remove(a)),
+              onRemoveAttachment: (a) {
+                setState(() => attachments.remove(a));
+                _saveFiles();
+              },
               onPickModel: () => showModelSheet(context, agent),
             ),
           ],
