@@ -1,12 +1,17 @@
 /**
- * web_search and web_fetch tools, so the agent can look up install steps,
+ * web_search, web_fetch and web_screenshot tools, so the agent can look up install steps,
  * docs and error messages instead of guessing.
  *
  * Search works without a key (DuckDuckGo, DuckDuckGo Lite, then Brave, scraped
- * from their HTML pages). A Brave Search or Tavily key, when configured, is used first.
+ * from their HTML pages). Search1API, Brave Search or Tavily keys, when configured, are used first;
+ * each service can have several keys, used in turn (keyring.ts). Search1API can also read pages
+ * (crawl) and take screenshots.
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { Type } from "typebox";
+import { KeyError, withKeys } from "./keyring.js";
 
 const UA =
 	"Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36";
@@ -18,8 +23,106 @@ export interface SearchResult {
 }
 
 export interface SearchKeys {
-	brave?: string;
-	tavily?: string;
+	brave: string[];
+	tavily: string[];
+	s1: string[];
+	/** Which Search1API features to use when it has keys. */
+	s1Search: boolean;
+	s1Crawl: boolean;
+	s1Screenshot: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Search1API (https://s1.dev/docs)
+
+const S1 = "https://api.search1api.com";
+/** Statuses that mean the key can't serve this request; a screenshot's 403 is about the target, not the key. */
+const s1KeyProblem = (status: number) => status === 401 || status === 402 || status === 429;
+
+async function s1Request(path: string, key: string, body: unknown, signal?: AbortSignal) {
+	const res = await fetch(`${S1}${path}`, {
+		method: "POST",
+		headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+		signal,
+	});
+	if (!res.ok) {
+		const raw = await res.text().catch(() => "");
+		let message = "";
+		try {
+			const json = JSON.parse(raw);
+			message = json.message ?? json.error ?? json.detail ?? "";
+		} catch {
+			message = raw.slice(0, 200);
+		}
+		throw new KeyError(`Search1API ${res.status}${message ? `: ${message}` : ""}`, res.status);
+	}
+	return res;
+}
+
+/** Sources Search1API can search besides the default (Google). */
+export const S1_SOURCES = [
+	"google", "bing", "duckduckgo", "yahoo", "yandex", "x", "reddit", "github", "youtube", "arxiv",
+	"wikipedia", "grokipedia", "imdb", "wechat", "bilibili", "baidu", "quark", "360", "bingcn",
+];
+
+async function s1Search(q: string, n: number, key: string, source: string | undefined, signal?: AbortSignal) {
+	const res = await s1Request("/search", key, { query: q, max_results: n, ...(source ? { search_service: source } : {}) }, signal);
+	const body = (await res.json()) as any;
+	return (body.results ?? []).map((r: any) => ({
+		title: r.title ?? "",
+		url: r.link ?? "",
+		snippet: [r.published_date, r.snippet].filter(Boolean).join(" · "),
+	})) as SearchResult[];
+}
+
+/** Reads a page through Search1API's crawler (handles pages a plain fetch can't). */
+export async function s1Crawl(url: string, keys: string[], signal?: AbortSignal) {
+	return withKeys(
+		"Search1API",
+		keys,
+		async (key) => {
+			const body = (await (await s1Request("/crawl", key, { url }, signal)).json()) as any;
+			const r = body.results ?? {};
+			return { url: r.link ?? url, title: r.title ?? "", text: r.content ?? "" };
+		},
+		s1KeyProblem,
+	);
+}
+
+export interface ScreenshotOptions {
+	full_page?: boolean;
+	selector?: string;
+	color_scheme?: "light" | "dark";
+	viewport?: { width: number; height: number };
+}
+
+/** A PNG of a public page, rendered by Search1API. */
+export async function s1Screenshot(url: string, opts: ScreenshotOptions, keys: string[], signal?: AbortSignal) {
+	return withKeys(
+		"Search1API",
+		keys,
+		async (key) => {
+			const res = await s1Request("/screenshot", key, { url, format: "png", ...opts }, signal);
+			return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: res.headers.get("content-type") ?? "image/png" };
+		},
+		s1KeyProblem,
+	);
+}
+
+/** Credits left on each key, for the settings screen. */
+export async function s1Usage(keys: string[]) {
+	return Promise.all(
+		keys.map(async (key) => {
+			try {
+				const res = await fetch(`${S1}/usage`, { headers: { Authorization: `Bearer ${key}` } });
+				if (!res.ok) return { usage: null, error: `HTTP ${res.status}` };
+				return { usage: Number(((await res.json()) as any).usage ?? 0), error: null };
+			} catch (e) {
+				return { usage: null, error: (e as Error).message };
+			}
+		}),
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -30,7 +133,7 @@ async function braveSearch(q: string, n: number, key: string, signal?: AbortSign
 		headers: { Accept: "application/json", "X-Subscription-Token": key },
 		signal,
 	});
-	if (!res.ok) throw new Error(`Brave ${res.status}`);
+	if (!res.ok) throw new KeyError(`Brave ${res.status}`, res.status);
 	const body = (await res.json()) as any;
 	return (body.web?.results ?? []).map((r: any) => ({
 		title: r.title,
@@ -46,7 +149,7 @@ async function tavilySearch(q: string, n: number, key: string, signal?: AbortSig
 		body: JSON.stringify({ query: q, max_results: n }),
 		signal,
 	});
-	if (!res.ok) throw new Error(`Tavily ${res.status}`);
+	if (!res.ok) throw new KeyError(`Tavily ${res.status}`, res.status);
 	const body = (await res.json()) as any;
 	return (body.results ?? []).map((r: any) => ({ title: r.title, url: r.url, snippet: r.content ?? "" }));
 }
@@ -125,10 +228,14 @@ async function braveHtmlSearch(q: string, n: number, signal?: AbortSignal): Prom
 	return out;
 }
 
-export async function webSearch(q: string, n: number, keys: SearchKeys, signal?: AbortSignal) {
+export async function webSearch(q: string, n: number, keys: SearchKeys, signal?: AbortSignal, source?: string) {
 	const attempts: [string, () => Promise<SearchResult[]>][] = [];
-	if (keys.brave) attempts.push(["brave", () => braveSearch(q, n, keys.brave!, signal)]);
-	if (keys.tavily) attempts.push(["tavily", () => tavilySearch(q, n, keys.tavily!, signal)]);
+	if (keys.s1Search && keys.s1.length) {
+		const name = source ? `search1api/${source}` : "search1api";
+		attempts.push([name, () => withKeys("Search1API", keys.s1, (k) => s1Search(q, n, k, source, signal), s1KeyProblem)]);
+	}
+	if (keys.brave.length) attempts.push(["brave", () => withKeys("Brave", keys.brave, (k) => braveSearch(q, n, k, signal))]);
+	if (keys.tavily.length) attempts.push(["tavily", () => withKeys("Tavily", keys.tavily, (k) => tavilySearch(q, n, k, signal))]);
 	attempts.push(
 		["duckduckgo", () => duckSearch(q, n, signal)],
 		["duckduckgo-lite", () => duckLiteSearch(q, n, signal)],
@@ -223,7 +330,7 @@ function decodeEntities(s: string) {
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }], details: undefined });
 
-export function webTools(keys: () => SearchKeys) {
+export function webTools(keys: () => SearchKeys, cwd: () => string) {
 	return [
 		{
 			name: "web_search",
@@ -237,13 +344,20 @@ export function webTools(keys: () => SearchKeys) {
 			parameters: Type.Object({
 				query: Type.String({ description: "Search query" }),
 				count: Type.Optional(Type.Number({ description: "Number of results (default 8, max 20)" })),
+				source: Type.Optional(
+					Type.String({
+						description:
+							"Where to search, when a Search1API key is set: github (code, issues), reddit (experience reports), arxiv (papers), youtube, x, wikipedia, or another engine such as bing. Default: general web.",
+					}),
+				),
 			}),
-			async execute(_id: string, params: { query: string; count?: number }, signal?: AbortSignal) {
+			async execute(_id: string, params: { query: string; count?: number; source?: string }, signal?: AbortSignal) {
 				// Models trained on other search tools often send numResults/limit instead.
 				const alt = params as any;
 				const requested = Number(params.count ?? alt.numResults ?? alt.num_results ?? alt.limit ?? 8) || 8;
 				const n = Math.min(Math.max(requested, 1), 20);
-				const { engine, results } = await webSearch(params.query, n, keys(), signal);
+				const source = params.source && S1_SOURCES.includes(params.source.toLowerCase()) ? params.source.toLowerCase() : undefined;
+				const { engine, results } = await webSearch(params.query, n, keys(), signal, source);
 				const body = results
 					.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}${r.snippet ? `\n   ${r.snippet}` : ""}`)
 					.join("\n\n");
@@ -262,19 +376,84 @@ export function webTools(keys: () => SearchKeys) {
 				maxChars: Type.Optional(Type.Number({ description: "Characters to return (default 20000)" })),
 			}),
 			async execute(_id: string, params: { url: string; offset?: number; maxChars?: number }, signal?: AbortSignal) {
-				const page = await webFetch(params.url, signal);
+				const k = keys();
+				let page: { url: string; status?: number; title: string; text: string } | null = null;
+				let note = "";
+				if (k.s1Crawl && k.s1.length) {
+					try {
+						const url = /^https?:\/\//i.test(params.url) ? params.url : `https://${params.url}`;
+						page = { ...(await s1Crawl(url, k.s1, signal)), status: 200 };
+					} catch (e) {
+						if (signal?.aborted) throw e;
+						note = `\n(Search1API crawl failed: ${(e as Error).message}; fetched directly instead)`;
+					}
+				}
+				page ??= await webFetch(params.url, signal);
 				const offset = Math.max(params.offset ?? 0, 0);
 				const max = Math.min(Math.max(params.maxChars ?? 20000, 1000), 60000);
 				const chunk = page.text.slice(offset, offset + max);
 				const more = offset + max < page.text.length;
 				const head = [
-					`URL: ${page.url} (HTTP ${page.status})`,
+					`URL: ${page.url}${page.status ? ` (HTTP ${page.status})` : ""}${note}`,
 					page.title ? `Title: ${page.title}` : null,
 					`Showing ${offset}-${offset + chunk.length} of ${page.text.length} characters${more ? `; continue with offset ${offset + chunk.length}` : ""}`,
 				]
 					.filter(Boolean)
 					.join("\n");
 				return text(`${head}\n\n${chunk}`);
+			},
+		},
+		{
+			name: "web_screenshot",
+			label: "Screenshot page",
+			description:
+				"Take a screenshot of a public web page (rendered in a real browser by Search1API) and look at it. Use it to check how a deployed site or a design looks. Needs a Search1API key with screenshots turned on in Settings > Web & DNS. The PNG is also saved under .screenshots in the project.",
+			promptSnippet: "web_screenshot: see how a public web page looks",
+			parameters: Type.Object({
+				url: Type.String({ description: "Public http(s) URL" }),
+				fullPage: Type.Optional(Type.Boolean({ description: "The whole page instead of the first screen (default false)" })),
+				selector: Type.Optional(Type.String({ description: "CSS selector of one element to capture instead" })),
+				dark: Type.Optional(Type.Boolean({ description: "Prefer the page's dark color scheme" })),
+				mobile: Type.Optional(Type.Boolean({ description: "Phone-sized viewport (390x844) instead of desktop (1440x900)" })),
+			}),
+			async execute(
+				_id: string,
+				params: { url: string; fullPage?: boolean; selector?: string; dark?: boolean; mobile?: boolean },
+				signal?: AbortSignal,
+			) {
+				const k = keys();
+				if (!k.s1.length) throw new Error("No Search1API key. Add one in Settings > Web & DNS.");
+				if (!k.s1Screenshot) throw new Error("Screenshots are turned off in Settings > Web & DNS.");
+				const url = /^https?:\/\//i.test(params.url) ? params.url : `https://${params.url}`;
+				const shot = await s1Screenshot(
+					url,
+					{
+						// Search1API takes one or the other.
+						...(params.selector ? { selector: params.selector } : { full_page: !!params.fullPage }),
+						color_scheme: params.dark ? "dark" : "light",
+						...(params.mobile ? { viewport: { width: 390, height: 844 } } : {}),
+					},
+					k.s1,
+					signal,
+				);
+				const dir = join(cwd(), ".screenshots");
+				mkdirSync(dir, { recursive: true });
+				const host = (() => {
+					try {
+						return new URL(url).hostname.replace(/[^\w.-]/g, "_");
+					} catch {
+						return "page";
+					}
+				})();
+				const file = join(dir, `${host}-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
+				writeFileSync(file, shot.bytes);
+				return {
+					content: [
+						{ type: "text" as const, text: `Screenshot of ${url} (${Math.round(shot.bytes.length / 1024)} KB), saved to ${file}` },
+						{ type: "image" as const, data: shot.bytes.toString("base64"), mimeType: shot.mimeType },
+					],
+					details: undefined,
+				};
 			},
 		},
 	];

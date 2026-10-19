@@ -130,6 +130,12 @@ class AppSettings {
   String? get dnsUrl => json['dnsUrl'] as String?;
   bool get hasBraveKey => json['braveKey'] == true;
   bool get hasTavilyKey => json['tavilyKey'] == true;
+
+  /// A search service's saved keys ('brave', 'tavily', 's1'), masked to their last four characters.
+  List<String> keys(String service) => ((json['keys'] as Map?)?[service] as List? ?? const []).cast<String>();
+  bool get s1Search => json['s1Search'] != false;
+  bool get s1Crawl => json['s1Crawl'] != false;
+  bool get s1Screenshot => json['s1Screenshot'] != false;
   String get approvalMode => json['approvalMode'] as String? ?? 'ask_risky';
   List<Map<String, dynamic>> get fallbackModels =>
       (json['fallbackModels'] as List? ?? const []).map((e) => (e as Map).cast<String, dynamic>()).toList();
@@ -363,6 +369,27 @@ class Integrations extends ChangeNotifier {
     settings = AppSettings((await client.call<Map>('settings_set', {'settings': patch})).cast<String, dynamic>());
     notifyListeners();
   }
+
+  /// Adds the keys found in [text] (one per line) to [service]; returns how many were new.
+  Future<int> addSearchKeys(String service, String text) async {
+    final out = (await client.call<Map>('search_keys_add', {'service': service, 'text': text})).cast<String, dynamic>();
+    settings = AppSettings((out['settings'] as Map).cast<String, dynamic>());
+    notifyListeners();
+    return (out['added'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> removeSearchKey(String service, int index) async {
+    settings = AppSettings(
+      (await client.call<Map>('search_key_remove', {'service': service, 'index': index})).cast<String, dynamic>(),
+    );
+    notifyListeners();
+  }
+
+  /// Search1API credits left per key, in the order of [AppSettings.keys]; null where the check failed.
+  Future<List<({int? credits, String? error})>> s1Usage() async => [
+    for (final u in (await client.call<List>('s1_usage')).cast<Map>())
+      (credits: (u['usage'] as num?)?.toInt(), error: u['error'] as String?),
+  ];
 
   @override
   void dispose() {

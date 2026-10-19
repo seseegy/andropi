@@ -38,7 +38,7 @@ import { CustomProviders, fetchModels } from "./providers.js";
 import { type RunSession, Runner } from "./runs.js";
 import { Skills } from "./skills.js";
 import { GitHubSync } from "./sync.js";
-import { webTools } from "./web.js";
+import { s1Usage, webTools } from "./web.js";
 import {
 	collectFiles,
 	dbQuery,
@@ -55,7 +55,7 @@ import {
 type Command = { id?: number; type: string; [key: string]: any };
 
 /** Built-in and app tools; MCP tools are added per session. This is the *active* set. */
-const TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls", "web_search", "web_fetch"];
+const TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot"];
 
 const agentDir = getAgentDir();
 const workspace = process.env.ANDROPI_WORKSPACE ?? process.cwd();
@@ -160,7 +160,7 @@ async function buildSession(sessionManager: SessionManager, opts: { interactive:
 		sessionManager,
 		resourceLoader,
 		tools: [...TOOLS, ...mcpTools.map((t) => t.name)],
-		customTools: [...webTools(() => integrations.searchKeys()), ...mcpTools] as any,
+		customTools: [...webTools(() => integrations.searchKeys(), () => sessionManager.getCwd()), ...mcpTools] as any,
 	});
 	// Some models send "None" or numbers-as-strings for tool arguments.
 	installLenientTools(result.session.agent);
@@ -321,7 +321,9 @@ You are running inside AndroPI, an Android app, on the user's phone.
   Node.js, compilers and anything else. The home folder and workspace are the
   same paths inside and out.
 - You have \`web_search\` and \`web_fetch\` tools. Use them before guessing how
-  to install or use something, and to look up unfamiliar errors.
+  to install or use something, and to look up unfamiliar errors. With a
+  Search1API key you also have \`web_screenshot\`, to see how a page looks
+  (e.g. to check a site you built after deploying it).
 - Dev servers: run them in the background (\`nohup npm run dev > dev.log 2>&1 &\`)
   and print the URL (e.g. http://localhost:5173); the app offers a live
   preview and a public link for any localhost port it sees.
@@ -921,6 +923,12 @@ async function handle(cmd: Command): Promise<unknown> {
 			guard.mode = integrations.settings.approvalMode ?? "ask_risky";
 			return out;
 		}
+		case "search_keys_add":
+			return integrations.addSearchKeys(cmd.service, String(cmd.text ?? ""));
+		case "search_key_remove":
+			return integrations.removeSearchKey(cmd.service, Number(cmd.index));
+		case "s1_usage":
+			return s1Usage(integrations.searchKeys().s1);
 
 		// Agent skills (skills.ts). pi rescans them on reload.
 		case "skills_list":

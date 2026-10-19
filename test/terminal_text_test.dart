@@ -1,3 +1,4 @@
+import 'package:andropi/ui/terminal_pane.dart';
 import 'package:andropi/ui/terminal_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xterm/xterm.dart';
