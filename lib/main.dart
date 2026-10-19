@@ -5,12 +5,13 @@ import 'agent/agent_controller.dart';
 import 'ui/app_lock.dart';
 import 'ui/home_shell.dart';
 import 'ui/onboarding.dart';
+import 'ui/predictive_back.dart';
 import 'ui/i18n.dart';
 import 'ui/kit.dart';
 import 'ui/theme.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized().addObserver(PredictiveBack.instance);
   final agent = AgentController(AgentClient())..boot();
   runApp(AndroPiApp(agent: agent));
 }
@@ -27,6 +28,7 @@ class AndroPiApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
         title: tr('AndroPI'),
         debugShowCheckedModeBanner: false,
+        navigatorObservers: [PredictiveBack.instance],
         themeMode: appearance.value,
         theme: buildTheme(Brightness.light),
         darkTheme: buildTheme(Brightness.dark),
