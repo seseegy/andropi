@@ -512,4 +512,55 @@ const _id = <String, String>{
   'Switch model': 'Ganti model',
   'Nothing to retry': 'Tidak ada yang bisa diulang',
   'The agent is still working': 'Agent masih bekerja',
+  // GitHub sync and long texts
+  'Some networks block sites by answering DNS with a block page. DNS-over-HTTPS sends lookups encrypted, so search, model APIs and downloads reach the real servers.': 'Sebagian jaringan memblokir situs dengan menjawab DNS memakai halaman blokir. DNS-over-HTTPS mengirim pencarian alamat secara terenkripsi, sehingga pencarian, API model, dan unduhan sampai ke server yang sebenarnya.',
+  'Applies to the agent, web search, accounts and deploys. The Linux container uses the same provider.':
+      'Berlaku untuk agent, pencarian web, akun, dan deploy. Container Linux memakai provider yang sama.',
+  'Never': 'Belum pernah',
+  'Just now': 'Baru saja',
+  'min ago': 'mnt lalu',
+  'h ago': 'jam lalu',
+  'Sync to GitHub?': 'Sinkronkan ke GitHub?',
+  'AndroPI creates a private repository andropi-sync in your GitHub account and keeps your chats, projects and settings there.': 'AndroPI membuat repository private andropi-sync di akun GitHub kamu dan menyimpan chat, project, serta pengaturan di sana.',
+  'Provider keys and tokens are never uploaded. Chats can still contain anything you pasted into them, so keep the repository private.': 'Key provider dan token tidak pernah diunggah. Chat tetap bisa berisi apa pun yang pernah kamu tempel, jadi biarkan repository-nya private.',
+  'Turn on': 'Nyalakan',
+  'GitHub sync': 'Sinkron GitHub',
+  'projects': 'project',
+  'settings': 'pengaturan',
+  'chats removed': 'chat dihapus',
+  'Keep chats and projects in a private GitHub repository, and pick them up on another phone by signing in there.': 'Simpan chat dan project di repository GitHub private, lalu lanjutkan di HP lain cukup dengan login GitHub di sana.',
+  'Sign in to GitHub first': 'Login GitHub dulu',
+  'Sync to GitHub': 'Sinkronkan ke GitHub',
+  'Signed in as': 'Login sebagai',
+  'Syncing…': 'Menyinkronkan…',
+  'Last synced': 'Terakhir sinkron',
+  'Brought in': 'Masuk dari HP lain',
+  'Sync now': 'Sinkronkan sekarang',
+  'Private repository': 'Repository private',
+  'Too big for GitHub (not synced)': 'Terlalu besar untuk GitHub (tidak disinkronkan)',
+  'Only on this phone': 'Hanya di HP ini',
+  'Deleted on another phone, so no longer synced. They stay here until you delete them.':
+      'Sudah dihapus di HP lain, jadi tidak disinkronkan lagi. Tetap ada di sini sampai kamu menghapusnya.',
+  'What is synced': 'Yang disinkronkan',
+  'Chats, including ones deleted or continued on another phone':
+      'Chat, termasuk yang dihapus atau dilanjutkan di HP lain',
+  'Projects: git projects as their remote and branch (cloned on the other phone), other projects as files, without dependency and build folders': 'Project: project git sebagai alamat remote dan branch-nya (di-clone di HP lain), project lain sebagai file, tanpa folder dependensi dan build',
+  'Uncommitted changes in git projects stay on this phone; commit and push them to carry them over':
+      'Perubahan yang belum di-commit di project git tetap di HP ini; commit dan push supaya ikut terbawa',
+  'Prompt templates, skills, agent instructions and custom providers (without keys)':
+      'Template prompt, skill, instruksi agent, dan provider kustom (tanpa key)',
+  'Syncs a moment after the agent finishes, when you leave the app, and when it starts':
+      'Sinkron sesaat setelah agent selesai, saat kamu meninggalkan app, dan saat app dibuka',
+  'Runs through proot: no root or Termux needed. Your home folder and workspace are the same paths inside, so the agent can `apt install python3 nodejs` and work on your files directly.': 'Berjalan lewat proot: tanpa root atau Termux. Folder home dan workspace memakai path yang sama di dalamnya, jadi agent bisa `apt install python3 nodejs` dan langsung mengerjakan file kamu.',
+  'Downloads the official image from Docker Hub, then installs git, curl, ssh and certificates.':
+      'Mengunduh image resmi dari Docker Hub, lalu memasang git, curl, ssh, dan sertifikat.',
+  'Connect pi to databases, docs, browsers and more through Model Context Protocol servers; their tools show up as mcp_<server>_<tool>.': 'Hubungkan pi ke database, dokumentasi, browser, dan lainnya lewat server Model Context Protocol; tool-nya muncul sebagai mcp_<server>_<tool>.',
+  'Sync failed; tap for details': 'Sinkron gagal; ketuk untuk detail',
+  'Chats and projects on all your phones': 'Chat dan project di semua HP kamu',
+  'Modified by': 'Dimodifikasi oleh',
+  'Maintains this modified build: custom providers, GitHub releases and in-app updates, GitHub sync.':
+      'Mengelola versi modifikasi ini: provider kustom, rilis GitHub dan update di dalam app, serta sinkron GitHub.',
+  'Projects live in the AndroPI workspace. To bring in files from your phone, open a project and use Files → Import from phone.': 'Project disimpan di workspace AndroPI. Untuk memasukkan file dari HP, buka sebuah project lalu pakai Files → Impor dari HP.',
+  'To work in Download, Documents or any other folder on your phone, AndroPI needs "All files access". Turn it on for AndroPI on the next screen, then come back.': 'Untuk bekerja di Download, Documents, atau folder lain di HP, AndroPI butuh izin "Akses semua file". Nyalakan untuk AndroPI di layar berikutnya, lalu kembali ke sini.',
+  'GitHub sync is off': 'Sinkron GitHub mati',
 };

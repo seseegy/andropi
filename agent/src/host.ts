@@ -37,6 +37,7 @@ import { Mcp } from "./mcp.js";
 import { CustomProviders, fetchModels } from "./providers.js";
 import { type RunSession, Runner } from "./runs.js";
 import { Skills } from "./skills.js";
+import { GitHubSync } from "./sync.js";
 import { webTools } from "./web.js";
 import {
 	collectFiles,
@@ -71,6 +72,7 @@ let checkpoints: Checkpoints;
 let runner: Runner;
 let mcp: Mcp;
 let customProviders: CustomProviders;
+let sync: GitHubSync;
 const tunnels = new Tunnels();
 let unsubscribe: (() => void) | undefined;
 
@@ -191,6 +193,8 @@ function onSessionEvent(event: AgentSessionEvent) {
 	if (event.type === "agent_end" || (event as any).type === "agent_settled") {
 		const text = session?.getLastAssistantText?.() ?? "";
 		send({ type: "agent_done", sessionFile: session?.sessionFile ?? null, preview: text.slice(0, 200) });
+		// Sync a little after the turn, so a quick follow-up doesn't cause two pushes.
+		sync?.schedule(90_000);
 	}
 }
 
@@ -594,6 +598,19 @@ async function handle(cmd: Command): Promise<unknown> {
 			await modelRuntime.logout(cmd.provider);
 			return providers();
 
+		// GitHub sync (sync.ts).
+		case "sync_status":
+			return sync.status();
+		case "sync_enable":
+			return sync.setEnabled(!!cmd.on);
+		case "sync_now":
+			// "soon": the app is going to the background; give a running turn a moment to settle.
+			if (cmd.soon) {
+				sync.schedule(2000);
+				return sync.status();
+			}
+			return sync.syncNow();
+
 		// Custom endpoints (providers.ts).
 		case "custom_providers":
 			return customProviders.list();
@@ -950,6 +967,21 @@ async function main() {
 		await settingsManager.flush();
 	}
 	await openSession(SessionManager.continueRecent(workspace));
+	sync = new GitHubSync({
+		agentDir,
+		workspace,
+		stateDir,
+		integrations,
+		providers: customProviders,
+		activeSession: () => session?.sessionFile,
+		busy: () => !!session?.isStreaming || (runner?.summary().running ?? 0) > 0,
+		providersChanged: async () => {
+			await modelRuntime.refresh({ allowNetwork: false });
+		},
+		notify: (status) => send({ type: "sync", status }),
+	});
+	// Pick up what other phones synced while this one was off.
+	sync.schedule(20_000);
 	runner = new Runner(join(stateDir, "runs.json"), backgroundSession, send, (p) => integrations.githubApi(p));
 
 	// Starter skills and MCP connections come up in the background; the chat

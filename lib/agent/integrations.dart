@@ -40,6 +40,24 @@ class RepoInfo {
   bool get cloned => json['cloned'] == true;
 }
 
+class SyncStatus {
+  SyncStatus(this.json);
+  final Map<String, dynamic> json;
+
+  bool get enabled => json['enabled'] == true;
+  bool get running => json['running'] == true;
+  String? get repo => json['repo'] as String?;
+  DateTime? get lastSync {
+    final t = json['lastSync'] as int?;
+    return t == null ? null : DateTime.fromMillisecondsSinceEpoch(t);
+  }
+
+  String? get lastError => json['lastError'] as String?;
+  List<String> get skipped => (json['skipped'] as List? ?? const []).cast<String>();
+  List<String> get localOnly => (json['localOnly'] as List? ?? const []).cast<String>();
+  Map<String, int> get imported => ((json['imported'] as Map?) ?? const {}).cast<String, int>();
+}
+
 class ProjectInfo {
   ProjectInfo(this.json);
   final Map<String, dynamic> json;
@@ -123,6 +141,13 @@ class Integrations extends ChangeNotifier {
   Integrations(this.client) {
     client.records.listen((r) {
       if (r['type'] == 'task') _taskLines.add(r);
+      if (r['type'] == 'sync') {
+        final s = SyncStatus((r['status'] as Map).cast<String, dynamic>());
+        // A finished sync may have brought projects in from another phone.
+        if (!s.running && (s.imported['projects'] ?? 0) > 0) unawaited(refreshProjects());
+        sync = s;
+        notifyListeners();
+      }
     });
   }
 
@@ -137,6 +162,9 @@ class Integrations extends ChangeNotifier {
   List<ProjectInfo> projects = const [];
   bool loaded = false;
 
+  /// GitHub sync of chats, projects and settings (agent/src/sync.ts).
+  SyncStatus? sync;
+
   void _apply(dynamic summary) {
     final s = (summary as Map).cast<String, dynamic>();
     final gh = s['github'];
@@ -150,6 +178,22 @@ class Integrations extends ChangeNotifier {
   }
 
   Future<void> refresh() async => _apply(await client.call('integrations'));
+
+  Future<void> refreshSync() async {
+    sync = SyncStatus(await client.call<Map<String, dynamic>>('sync_status'));
+    notifyListeners();
+  }
+
+  Future<void> setSync(bool on) async {
+    sync = SyncStatus(await client.call<Map<String, dynamic>>('sync_enable', {'on': on}));
+    notifyListeners();
+  }
+
+  /// Syncs now; with [soon], shortly after (the app is going to the background).
+  Future<void> syncNow({bool soon = false}) async {
+    sync = SyncStatus(await client.call<Map<String, dynamic>>('sync_now', {'soon': soon}));
+    notifyListeners();
+  }
 
   Future<void> refreshProjects() async {
     final list = await client.call<List>('projects');

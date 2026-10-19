@@ -85,6 +85,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       );
     f.addListener(_onFeatures);
     f.refreshRuns().catchError((_) {});
+    agent.integrations.refreshSync().catchError((_) {});
     agent.client.requestNotifications().catchError((_) {});
     // The app may have been opened by a share, the widget or the tile.
     WidgetsBinding.instance.addPostFrameCallback((_) => _takeLaunch());
@@ -144,6 +145,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     lifecycle = state;
     if (state == AppLifecycleState.resumed) Updater.instance.onResume().catchError((_) {});
+    // Leaving the app: sync shortly, before Android may stop it.
+    if (state == AppLifecycleState.paused && agent.integrations.sync?.enabled == true) {
+      agent.integrations.syncNow(soon: true).catchError((_) {});
+    }
   }
 
   /// Approvals that arrive while the app is in the background become notifications.

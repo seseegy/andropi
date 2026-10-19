@@ -17,6 +17,7 @@ import 'mesh.dart';
 import 'network_screen.dart';
 import 'settings_screen.dart';
 import 'skills_screen.dart';
+import 'sync_screen.dart';
 import 'tasks_screen.dart';
 import 'templates_screen.dart';
 import 'theme.dart';
@@ -44,6 +45,7 @@ class _SettingsHubState extends State<SettingsHub> {
     it.refresh().catchError((_) {});
     it.refreshContainer().catchError((_) => it.container!);
     it.refreshSettings().catchError((_) => it.settings!);
+    it.refreshSync().catchError((_) {});
     it.skills().then((s) {
       if (mounted) setState(() => skillCount = s.length);
     }, onError: (_) {});
@@ -314,6 +316,17 @@ class _SettingsHubState extends State<SettingsHub> {
               SettingsGroup(
                 children: [
                   SettingsRow(
+                    icon: LucideIcons.refreshCw,
+                    color: const Color(0xFF16A34A),
+                    title: tr('GitHub sync'),
+                    subtitle: it.sync?.enabled == true
+                        ? (it.sync!.lastError != null
+                              ? tr('Sync failed; tap for details')
+                              : '${tr('Last synced')}: ${syncAgo(it.sync!.lastSync)}')
+                        : tr('Chats and projects on all your phones'),
+                    onTap: () => _open(SyncScreen(agent: agent)),
+                  ),
+                  SettingsRow(
                     icon: LucideIcons.archive,
                     color: const Color(0xFF0EA5E9),
                     title: tr('Backup & restore'),
@@ -393,6 +406,8 @@ class _SettingsHubState extends State<SettingsHub> {
               ),
               SectionLabel(tr('Made by')),
               _DeveloperCard(openUrl: agent.client.openUrl),
+              SectionLabel(tr('Modified by')),
+              _ModifierCard(openUrl: agent.client.openUrl),
               SectionLabel(tr('About')),
               SettingsGroup(
                 children: [
@@ -568,6 +583,62 @@ class _DeveloperCard extends StatelessWidget {
                 label: tr('Repositories'),
                 onTap: () => openUrl('$github?tab=repositories'),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The fork this build comes from.
+class _ModifierCard extends StatelessWidget {
+  const _ModifierCard({required this.openUrl});
+  final Future<void> Function(String url) openUrl;
+
+  static const github = 'https://github.com/seseegy';
+  static const repo = 'https://github.com/seseegy/andropi';
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return SurfaceCard(
+      onTap: () => openUrl(github),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Avatar(name: 'seseegy', url: 'https://avatars.githubusercontent.com/u/221409196?v=4', size: 52),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('seseegy', style: text.titleLarge),
+                    Text(
+                      '@seseegy',
+                      style: TextStyle(fontFamily: mono, fontSize: 12.5, color: p.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(SimpleIcons.github, size: 22, color: p.text),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            tr('Maintains this modified build: custom providers, GitHub releases and in-app updates, GitHub sync.'),
+            style: text.bodyMedium?.copyWith(color: p.muted),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _LinkChip(icon: SimpleIcons.github, label: 'github.com/seseegy', onTap: () => openUrl(github)),
+              _LinkChip(icon: LucideIcons.folderGit2, label: 'seseegy/andropi', onTap: () => openUrl(repo)),
             ],
           ),
         ],
