@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:simple_icons/simple_icons.dart';
 
 import '../agent/agent_controller.dart';
+import '../agent/updater.dart';
 import 'accounts_screen.dart';
 import 'backup_screen.dart';
 import 'chat_extras.dart';
@@ -19,6 +20,7 @@ import 'skills_screen.dart';
 import 'tasks_screen.dart';
 import 'templates_screen.dart';
 import 'theme.dart';
+import 'update_sheet.dart';
 import 'usage_screen.dart';
 
 /// The settings home: everything the agent can use, grouped.
@@ -135,7 +137,7 @@ class _SettingsHubState extends State<SettingsHub> {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     return ListenableBuilder(
-      listenable: Listenable.merge([agent, agent.integrations, agent.features, Appearance.instance]),
+      listenable: Listenable.merge([agent, agent.integrations, agent.features, Appearance.instance, Updater.instance]),
       builder: (context, _) {
         final it = agent.integrations;
         final look = Appearance.instance;
@@ -394,6 +396,7 @@ class _SettingsHubState extends State<SettingsHub> {
               SectionLabel(tr('About')),
               SettingsGroup(
                 children: [
+                  if (Updater.instance.supported) _updatesRow(context),
                   _InfoRow('Workspace', agent.info['workspace']?.toString() ?? '—'),
                   _InfoRow('Agent directory', agent.info['agentDir']?.toString() ?? '—'),
                   Padding(
@@ -413,6 +416,34 @@ class _SettingsHubState extends State<SettingsHub> {
           ),
         );
       },
+    );
+  }
+}
+
+extension on _SettingsHubState {
+  Widget _updatesRow(BuildContext context) {
+    final p = context.palette;
+    final u = Updater.instance;
+    final d = u.download;
+    final status = switch (u.phase) {
+      UpdatePhase.checking => tr('Checking for updates…'),
+      UpdatePhase.available => '${tr('Update available')}: ${u.latest!.version}',
+      UpdatePhase.downloading =>
+        d.progress != null ? '${tr('Downloading')} ${(d.progress! * 100).round()}%' : tr('Downloading'),
+      UpdatePhase.ready => tr('Update ready to install'),
+      UpdatePhase.failed => tr('Download failed'),
+      UpdatePhase.upToDate => tr('AndroPI is up to date'),
+      UpdatePhase.idle => tr('Check for updates'),
+    };
+    final attention = u.phase == UpdatePhase.available || u.phase == UpdatePhase.ready;
+    return SettingsRow(
+      icon: LucideIcons.download,
+      color: attention ? p.accent : p.muted,
+      title: tr('App updates'),
+      subtitle: '${tr('Version')} ${u.currentVersion}  ·  $status',
+      trailing: attention ? Pill(tr('New'), color: p.accent, dot: true) : null,
+      onTap: () =>
+          showUpdateSheet(context, agent, check: u.phase == UpdatePhase.idle || u.phase == UpdatePhase.upToDate),
     );
   }
 }

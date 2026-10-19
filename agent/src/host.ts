@@ -34,6 +34,7 @@ import { Guard } from "./guard.js";
 import { Integrations, type Log } from "./integrations.js";
 import { installLenientTools } from "./lenient.js";
 import { Mcp } from "./mcp.js";
+import { CustomProviders, fetchModels } from "./providers.js";
 import { type RunSession, Runner } from "./runs.js";
 import { Skills } from "./skills.js";
 import { webTools } from "./web.js";
@@ -69,6 +70,7 @@ let templates: Templates;
 let checkpoints: Checkpoints;
 let runner: Runner;
 let mcp: Mcp;
+let customProviders: CustomProviders;
 const tunnels = new Tunnels();
 let unsubscribe: (() => void) | undefined;
 
@@ -340,6 +342,7 @@ async function providers() {
 			oauth: modelRuntime.isUsingOAuth(p.id),
 			methods: [auth.apiKey?.login ? "api_key" : null, auth.oauth ? "oauth" : null].filter(Boolean),
 			models: modelRuntime.getModels(p.id).length,
+			custom: customProviders.ids().has(p.id),
 		});
 	}
 	return out;
@@ -494,6 +497,23 @@ async function handle(cmd: Command): Promise<unknown> {
 		case "logout":
 			await modelRuntime.logout(cmd.provider);
 			return providers();
+
+		// Custom endpoints (providers.ts).
+		case "custom_providers":
+			return customProviders.list();
+		case "custom_provider_save": {
+			const custom = customProviders.ids();
+			const builtin = new Set(modelRuntime.getProviders().map((p) => p.id).filter((id) => !custom.has(id)));
+			customProviders.save(cmd.provider ?? {}, builtin);
+			await modelRuntime.refresh({ allowNetwork: false });
+			return customProviders.list();
+		}
+		case "custom_provider_delete":
+			customProviders.remove(cmd.providerId);
+			await modelRuntime.refresh({ allowNetwork: false });
+			return customProviders.list();
+		case "custom_provider_fetch_models":
+			return fetchModels(cmd.api, cmd.baseUrl, cmd.apiKey || (cmd.providerId ? customProviders.key(cmd.providerId) : ""));
 
 		case "new_session":
 			return openSession(SessionManager.create(cmd.cwd ?? workspace));
@@ -816,6 +836,8 @@ async function main() {
 	checkpoints = new Checkpoints(join(stateDir, "checkpoints"));
 	container = new Container(process.env.ANDROPI_FILES ?? join(agentDir, "..", "..", ".."));
 	mcp = new Mcp(join(stateDir, "mcp.json"), () => send({ type: "mcp", servers: mcp.summary() }));
+	customProviders = new CustomProviders(join(stateDir, "custom-providers.json"), join(agentDir, "models.json"));
+	customProviders.applyEnv();
 	modelRuntime = await ModelRuntime.create();
 	settingsManager = SettingsManager.create(workspace, agentDir);
 	// Linux container is the agent's shell by default once installed.

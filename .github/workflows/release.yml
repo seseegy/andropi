@@ -1,0 +1,147 @@
+# Builds the GitHub ("full") APKs on every push to main and publishes them as a release. The app's updater
+# (lib/agent/updater.dart) reads the latest release of this repository and installs the APK for the phone's ABI.
+#
+# Versions never collide: the patch number and the build number both grow with the run number, and runs are
+# serialized. The base comes from pubspec.yaml (version: X.Y.Z+B), so bump X.Y there for a bigger release.
+#   release = X.Y.(Z + run_number), versionCode = B + run_number
+#
+# Every APK is signed with the same release key from the repository secrets, so each update installs over the
+# previous one. Without the secrets the run fails instead of publishing an APK signed with another key.
+#   KEYSTORE_BASE64    base64 of the .jks file (base64 -w0 release.jks)
+#   KEYSTORE_PASSWORD  store password
+#   KEY_ALIAS          key alias
+#   KEY_PASSWORD       key password
+
+name: Release APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "store/**"
+      - "fastlane/**"
+      - "**.md"
+  workflow_dispatch:
+
+# One release at a time, in order; a newer push waits instead of cancelling a release halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          base=$(sed -n 's/^version: *//p' pubspec.yaml)
+          name=${base%%+*}
+          build=${base#*+}
+          [ "$build" = "$base" ] && build=0
+          IFS=. read -r major minor patch <<< "$name"
+          version="$major.$minor.$((patch + GITHUB_RUN_NUMBER))"
+          code=$((build + GITHUB_RUN_NUMBER))
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version ($code)"
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          for s in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!s}" ]; then echo "::error::Repository secret $s is missing"; exit 1; fi
+          done
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          # Fail early on a wrong password or alias rather than after a long build.
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Native runtime
+        run: |
+          pip install lief
+          python tool/bundle_runtime.py
+
+      - name: Agent host
+        working-directory: agent
+        run: |
+          npm ci
+          node build.mjs
+
+      - name: Build APKs
+        run: |
+          flutter pub get
+          flutter build apk --flavor full --release --split-per-abi \
+            --target-platform android-arm,android-arm64,android-x64 \
+            --build-name "${{ steps.version.outputs.name }}" \
+            --build-number "${{ steps.version.outputs.code }}" \
+            --dart-define=UPDATE_REPO=${{ github.repository }}
+
+      - name: Collect APKs
+        run: |
+          mkdir -p release
+          shopt -s nullglob
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            # app-<abi>-full-release.apk; matched loosely since the flavor's place in the name varies.
+            apks=(build/app/outputs/flutter-apk/*-"$abi"-*release.apk build/app/outputs/flutter-apk/*-"$abi"-release.apk)
+            if [ ${#apks[@]} -eq 0 ]; then echo "::error::No APK for $abi"; ls build/app/outputs/flutter-apk; exit 1; fi
+            cp "${apks[0]}" "release/andropi-${{ steps.version.outputs.name }}-$abi.apk"
+          done
+          (cd release && sha256sum *.apk > SHA256SUMS.txt)
+          ls -lh release
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.name }}
+        run: |
+          # A re-run of the same run number replaces the files of its own release.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* \
+              --target "$GITHUB_SHA" \
+              --title "AndroPI ${{ steps.version.outputs.name }}" \
+              --generate-notes \
+              --latest
+          fi
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" android/key.properties
