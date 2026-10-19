@@ -137,6 +137,7 @@ class Appearance extends ValueNotifier<ThemeMode> {
       accent = ((saved['accent'] as num?)?.toInt() ?? 0).clamp(0, accentChoices.length - 1);
       language = saved['language'] as String? ?? 'en';
       appLock = saved['appLock'] == true;
+      terminalFontSize = (saved['terminalFontSize'] as num?)?.toDouble() ?? terminalFontSize;
     } catch (_) {}
   }
 
@@ -150,12 +151,23 @@ class Appearance extends ValueNotifier<ThemeMode> {
   String language = 'en';
   bool appLock = false;
 
+  /// Pinch or A−/A+ in the terminal.
+  double terminalFontSize = 12.5;
+
   void set(ThemeMode mode) {
     value = mode;
     _save();
   }
 
-  void update({double? textScale, bool? compact, int? accent, String? language, bool? appLock}) {
+  void update({
+    double? textScale,
+    bool? compact,
+    int? accent,
+    String? language,
+    bool? appLock,
+    double? terminalFontSize,
+  }) {
+    this.terminalFontSize = terminalFontSize ?? this.terminalFontSize;
     this.textScale = textScale ?? this.textScale;
     this.compact = compact ?? this.compact;
     this.accent = accent ?? this.accent;
@@ -182,6 +194,7 @@ class Appearance extends ValueNotifier<ThemeMode> {
           'accent': accent,
           'language': language,
           'appLock': appLock,
+          'terminalFontSize': terminalFontSize,
         }),
       );
     } catch (_) {}

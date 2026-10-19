@@ -124,6 +124,23 @@ alias gs='git status'
   }
 }
 
+/// The selected text, without the padding spaces terminal lines carry.
+String terminalSelectionText(Terminal terminal, TerminalController controller) {
+  final range = controller.selection;
+  if (range == null) return '';
+  return terminal.buffer.getText(range).split('\n').map((l) => l.trimRight()).join('\n').trim();
+}
+
+/// Selects the whole buffer, scrollback included.
+void selectAllTerminal(Terminal terminal, TerminalController controller) {
+  final buffer = terminal.buffer;
+  if (buffer.height == 0) return;
+  controller.setSelection(buffer.createAnchor(0, 0), buffer.createAnchor(buffer.viewWidth, buffer.height - 1));
+}
+
+/// A terminal font size: steps of 0.5, between 8 and 28.
+double terminalFontFor(double size) => ((size * 2).round() / 2).clamp(8.0, 28.0).toDouble();
+
 class TerminalScreen extends StatefulWidget {
   const TerminalScreen({super.key, required this.agent, this.command});
   final AgentController agent;
@@ -143,6 +160,12 @@ class _TerminalScreenState extends State<TerminalScreen> {
   final tabScroll = ScrollController();
   bool ctrl = false;
 
+  /// Font size; pinch with two fingers or A−/A+ to change it.
+  double fontSize = Appearance.instance.terminalFontSize;
+  final _pointers = <int, Offset>{};
+  double? _pinchStartDistance;
+  double _pinchStartFont = 12.5;
+
   AgentController get agent => widget.agent;
   List<ShellSession> get sessions => ShellSession.sessions;
 
@@ -153,6 +176,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void initState() {
     super.initState();
+    // Long-press (or drag) selects text; the selection toolbar follows it.
+    controller.addListener(_onSelection);
     ShellSession.changes.addListener(_changed);
     final command = widget.command;
     if (command != null || session == null) starting = true;
@@ -175,6 +200,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void dispose() {
     ShellSession.changes.removeListener(_changed);
+    controller.removeListener(_onSelection);
     for (final s in sessions) {
       s.terminal.onOutput = s.input;
     }
@@ -432,17 +458,32 @@ class _TerminalScreenState extends State<TerminalScreen> {
           : Column(
               children: [
                 Expanded(
-                  child: TerminalView(
-                    s.terminal,
-                    key: ObjectKey(s),
-                    controller: controller,
-                    focusNode: focus,
-                    autofocus: true,
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    keyboardType: TextInputType.visiblePassword,
-                    keyboardAppearance: dark ? Brightness.dark : Brightness.light,
-                    textStyle: const TerminalStyle(fontFamily: mono, fontSize: 12.5),
-                    theme: dark ? _darkTheme(p) : _lightTheme(p),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Listener(
+                          onPointerDown: _pointerDown,
+                          onPointerMove: _pointerMove,
+                          onPointerUp: _pointerUp,
+                          onPointerCancel: _pointerUp,
+                          child: TerminalView(
+                            s.terminal,
+                            key: ObjectKey(s),
+                            controller: controller,
+                            focusNode: focus,
+                            autofocus: true,
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                            keyboardType: TextInputType.visiblePassword,
+                            keyboardAppearance: dark ? Brightness.dark : Brightness.light,
+                            textStyle: TerminalStyle(fontFamily: mono, fontSize: fontSize),
+                            theme: dark ? _darkTheme(p) : _lightTheme(p),
+                          ),
+                        ),
+                      ),
+                      // Long-press selects; this bar copies it, selects everything, or pastes.
+                      if (controller.selection != null)
+                        Positioned(top: 8, left: 0, right: 0, child: Center(child: _selectionBar(p, s))),
+                    ],
                   ),
                 ),
                 _KeyBar(
@@ -451,13 +492,120 @@ class _TerminalScreenState extends State<TerminalScreen> {
                   onKey: _key,
                   onText: _text,
                   onHistory: _historySheet,
-                  onPaste: () async {
-                    final data = await Clipboard.getData(Clipboard.kTextPlain);
-                    if (data?.text != null) s.terminal.paste(data!.text!);
+                  onPaste: () => _paste(s),
+                  onZoomOut: () {
+                    _setFont(fontSize - 1);
+                    _saveFont();
+                  },
+                  onZoomIn: () {
+                    _setFont(fontSize + 1);
+                    _saveFont();
                   },
                 ),
               ],
             ),
+    );
+  }
+
+  void _onSelection() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _copy(ShellSession s) async {
+    final text = terminalSelectionText(s.terminal, controller);
+    controller.clearSelection();
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Copied')), duration: const Duration(seconds: 1)));
+    }
+  }
+
+  void _selectAll(ShellSession s) => selectAllTerminal(s.terminal, controller);
+
+  Future<void> _paste(ShellSession s) async {
+    controller.clearSelection();
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text != null && text.isNotEmpty) s.terminal.paste(text);
+    focus.requestFocus();
+  }
+
+  void _setFont(double size) {
+    final next = terminalFontFor(size);
+    if (next != fontSize) setState(() => fontSize = next);
+  }
+
+  void _saveFont() => Appearance.instance.update(terminalFontSize: fontSize);
+
+  // Two-finger pinch, read from raw pointers so it doesn't fight the terminal's own drag and long-press.
+  void _pointerDown(PointerDownEvent e) {
+    _pointers[e.pointer] = e.position;
+    if (_pointers.length == 2) {
+      final pts = _pointers.values.toList();
+      _pinchStartDistance = (pts[0] - pts[1]).distance;
+      _pinchStartFont = fontSize;
+    }
+  }
+
+  void _pointerMove(PointerMoveEvent e) {
+    if (!_pointers.containsKey(e.pointer)) return;
+    _pointers[e.pointer] = e.position;
+    final start = _pinchStartDistance;
+    if (_pointers.length != 2 || start == null || start < 10) return;
+    final pts = _pointers.values.toList();
+    _setFont(_pinchStartFont * (pts[0] - pts[1]).distance / start);
+  }
+
+  void _pointerUp(PointerEvent e) {
+    _pointers.remove(e.pointer);
+    if (_pointers.length < 2 && _pinchStartDistance != null) {
+      _pinchStartDistance = null;
+      _saveFont();
+    }
+  }
+
+  Widget _selectionBar(Palette p, ShellSession s) {
+    Widget action(String label, IconData icon, VoidCallback onTap) => InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: p.inverse),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(color: p.inverse, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Material(
+      color: p.text,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          action(tr('Copy'), LucideIcons.copy, () => _copy(s)),
+          action(tr('Select all'), LucideIcons.textSelect, () => _selectAll(s)),
+          action(tr('Paste'), LucideIcons.clipboardPaste, () => _paste(s)),
+          IconButton(
+            tooltip: tr('Close'),
+            visualDensity: VisualDensity.compact,
+            onPressed: controller.clearSelection,
+            icon: Icon(LucideIcons.x, size: 16, color: p.inverse),
+          ),
+        ],
+      ),
     );
   }
 
@@ -641,6 +789,8 @@ class _KeyBar extends StatelessWidget {
     required this.onText,
     required this.onPaste,
     required this.onHistory,
+    required this.onZoomOut,
+    required this.onZoomIn,
   });
   final bool ctrl;
   final VoidCallback onCtrl;
@@ -648,6 +798,8 @@ class _KeyBar extends StatelessWidget {
   final void Function(String) onText;
   final VoidCallback onPaste;
   final VoidCallback onHistory;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomIn;
 
   @override
   Widget build(BuildContext context) {
@@ -690,6 +842,8 @@ class _KeyBar extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
+              key('A−', onZoomOut),
+              key('A+', onZoomIn),
               key('esc', () => onKey(TerminalKey.escape)),
               key('tab', () => onKey(TerminalKey.tab)),
               key('ctrl', onCtrl, active: ctrl),
