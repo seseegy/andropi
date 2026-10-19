@@ -11,6 +11,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { configureDns, type DnsMode } from "./dns.js";
+import { maskKey, parseKeys } from "./keyring.js";
 import { readSecureJson, writeSecureJson } from "./secure.js";
 
 export interface SshHost {
@@ -33,8 +34,14 @@ interface Store {
 export interface AppSettings {
 	dns: DnsMode;
 	dnsUrl?: string;
+	/** Search API keys, one per line (several are used in turn). */
 	braveKey?: string;
 	tavilyKey?: string;
+	s1Key?: string;
+	/** Which Search1API features the agent uses; unset means on. */
+	s1Search?: boolean;
+	s1Crawl?: boolean;
+	s1Screenshot?: boolean;
 	/** Agent shell in the Linux container; unset means on whenever it is installed. */
 	containerShell?: boolean;
 	/** When the agent must ask before acting (see guard.ts). */
@@ -74,6 +81,9 @@ export interface CiSnapshot {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const FAILED = new Set(["failure", "cancelled", "timed_out", "startup_failure", "action_required"]);
 
+export type KeyService = "brave" | "tavily" | "s1";
+const KEY_FIELD = { brave: "braveKey", tavily: "tavilyKey", s1: "s1Key" } as const;
+
 export class Integrations {
 	private store: Store = { sshHosts: [] };
 	private readonly file: string;
@@ -97,14 +107,19 @@ export class Integrations {
 		return { ...DEFAULT_SETTINGS, ...this.store.settings };
 	}
 
-	/** Keys are write-only from the app's point of view: it only learns whether one is set. */
+	/** Keys are write-only from the app's point of view: it only sees their last four characters. */
 	publicSettings() {
-		const { dns, dnsUrl, braveKey, tavilyKey, approvalMode, fallbackModels, dailyBudget } = this.settings;
+		const { dns, dnsUrl, braveKey, tavilyKey, s1Key, approvalMode, fallbackModels, dailyBudget } = this.settings;
+		const masked = (text?: string) => parseKeys(text).map(maskKey);
 		return {
 			dns,
 			dnsUrl: dnsUrl ?? null,
 			braveKey: !!braveKey,
 			tavilyKey: !!tavilyKey,
+			keys: { brave: masked(braveKey), tavily: masked(tavilyKey), s1: masked(s1Key) },
+			s1Search: this.settings.s1Search ?? true,
+			s1Crawl: this.settings.s1Crawl ?? true,
+			s1Screenshot: this.settings.s1Screenshot ?? true,
 			approvalMode: approvalMode ?? "ask_risky",
 			fallbackModels: fallbackModels ?? [],
 			dailyBudget: dailyBudget ?? 0,
@@ -129,7 +144,34 @@ export class Integrations {
 	}
 
 	searchKeys() {
-		return { brave: this.settings.braveKey, tavily: this.settings.tavilyKey };
+		const s = this.settings;
+		return {
+			brave: parseKeys(s.braveKey),
+			tavily: parseKeys(s.tavilyKey),
+			s1: parseKeys(s.s1Key),
+			s1Search: s.s1Search ?? true,
+			s1Crawl: s.s1Crawl ?? true,
+			s1Screenshot: s.s1Screenshot ?? true,
+		};
+	}
+
+	/** Adds the keys found in pasted text (one per line) to a service's keys; returns how many were new. */
+	addSearchKeys(service: KeyService, text: string) {
+		const field = KEY_FIELD[service];
+		if (!field) throw new Error(`Unknown service: ${service}`);
+		const have = parseKeys(this.settings[field]);
+		const fresh = parseKeys(text).filter((k) => !have.includes(k));
+		if (fresh.length) this.updateSettings({ [field]: [...have, ...fresh].join("\n") });
+		return { added: fresh.length, settings: this.publicSettings() };
+	}
+
+	/** Removes a service's key by its position in the list publicSettings shows. */
+	removeSearchKey(service: KeyService, index: number) {
+		const field = KEY_FIELD[service];
+		if (!field) throw new Error(`Unknown service: ${service}`);
+		const keys = parseKeys(this.settings[field]);
+		keys.splice(index, 1);
+		return this.updateSettings({ [field]: keys.join("\n") });
 	}
 
 	private save() {
