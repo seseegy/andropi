@@ -305,6 +305,9 @@ const _id = <String, String>{
   'Unknown paths load index.html (React, Vue, Svelte routers)':
       'Path yang tidak dikenal memuat index.html (router React, Vue, Svelte)',
   'Build first': 'Build dulu',
+  'Close tab': 'Tutup tab',
+  'Close this tab?': 'Tutup tab ini?',
+  'Its shell is still running and will be stopped.': 'Shell-nya masih berjalan dan akan dihentikan.',
   'Runs npm run build in the Linux container': 'Menjalankan npm run build di container Linux',
   'Get a key': 'Dapatkan key',
   'Its API key and model list are deleted from this device.': 'API key dan daftar modelnya dihapus dari perangkat ini.',

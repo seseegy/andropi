@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:simple_icons/simple_icons.dart';
@@ -107,6 +109,30 @@ class _DeploySheetState extends State<_DeploySheet> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    if (target == DeployTarget.cloudflare) _suggestCloudflareFolder();
+  }
+
+  /// Cloudflare uploads files as they are, so point at the build output: an existing dist/build/out, or, for a
+  /// project with a package.json and no wrangler config, dist after building it first.
+  void _suggestCloudflareFolder() {
+    if (folder.text.trim().isNotEmpty) return;
+    final cwd = widget.agent.cwd;
+    for (final d in ['dist', 'build', 'out']) {
+      if (Directory('$cwd/$d').existsSync()) {
+        folder.text = d;
+        return;
+      }
+    }
+    final wrangler = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'].any((f) => File('$cwd/$f').existsSync());
+    if (!wrangler && File('$cwd/package.json').existsSync()) {
+      folder.text = 'dist';
+      buildFirst = true;
+    }
+  }
+
+  @override
   void dispose() {
     for (final c in [folder, name, message, remotePath]) {
       c.dispose();
@@ -134,7 +160,8 @@ class _DeploySheetState extends State<_DeploySheet> {
     final options = switch (target) {
       DeployTarget.vercel => {'project': name.text.trim(), 'preview': !production},
       DeployTarget.cloudflare => {
-        'name': name.text.trim(),
+        // Only a name the user typed; otherwise the wrangler config's name (or the project folder's) is used.
+        if (name.text.trim() != _base(widget.agent.cwd)) 'name': name.text.trim(),
         'root': widget.agent.cwd,
         'build': buildFirst,
         if (mode == CloudflareMode.workers) 'spa': spa else 'preview': !production,
@@ -183,11 +210,15 @@ class _DeploySheetState extends State<_DeploySheet> {
                 children: [
                   for (final t in DeployTarget.values)
                     ChoiceChip(
-                      avatar: Icon(t.icon, size: 16),
+                      // The selected chip is filled with the text color, so its icon flips like the label.
+                      avatar: Icon(t.icon, size: 16, color: target == t ? p.inverse : p.text),
                       label: Text(t.label),
                       showCheckmark: false,
                       selected: target == t,
-                      onSelected: (_) => setState(() => target = t),
+                      onSelected: (_) => setState(() {
+                        target = t;
+                        if (t == DeployTarget.cloudflare) _suggestCloudflareFolder();
+                      }),
                     ),
                 ],
               ),
@@ -251,7 +282,9 @@ class _DeploySheetState extends State<_DeploySheet> {
                     field(
                       name,
                       mode == CloudflareMode.workers ? 'Worker name' : 'Project name',
-                      helper: mode == CloudflareMode.workers ? 'A wrangler config\'s name wins' : null,
+                      helper: mode == CloudflareMode.workers
+                          ? 'Leave as is to use the name in the wrangler config'
+                          : null,
                     ),
                     if (mode == CloudflareMode.workers)
                       SwitchListTile(
@@ -296,10 +329,14 @@ class _DeploySheetState extends State<_DeploySheet> {
                   DeployTarget.ssh => [
                     DropdownButtonFormField<String>(
                       initialValue: hostId,
+                      isExpanded: true,
                       decoration: InputDecoration(labelText: tr('Server')),
                       items: [
                         for (final h in it.hosts)
-                          DropdownMenuItem(value: h.id, child: Text('${h.name}  ·  ${h.address}')),
+                          DropdownMenuItem(
+                            value: h.id,
+                            child: Text('${h.name}  ·  ${h.address}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
                       ],
                       onChanged: (v) => setState(() {
                         hostId = v;

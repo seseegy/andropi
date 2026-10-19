@@ -541,9 +541,11 @@ export class Integrations {
 				try {
 					return await run(cmd, args, opts);
 				} catch (e) {
-					const message = (e as Error).message;
-					if (/npx: (command )?not found|npx: not found|npm: not found/.test(message)) {
-						throw new Error("Node.js isn't installed in the Linux container. Ask the agent to install it (apt-get install -y nodejs npm), then deploy again.");
+					// bash says "npm: command not found", busybox sh "npm: not found".
+					if (/\b(npx|npm): (command )?not found/.test((e as Error).message)) {
+						const alpine = !!rootfs && existsSync(join(rootfs, "etc", "alpine-release"));
+						const install = alpine ? "apk add nodejs npm" : "apt-get install -y nodejs npm";
+						throw new Error(`Node.js isn't installed in the Linux container. Ask the agent to install it (${install}), then deploy again.`);
 					}
 					throw e;
 				}
@@ -577,6 +579,8 @@ export class Integrations {
 			case "cloudflare_workers":
 			case "cloudflare_pages": {
 				const root = typeof options.root === "string" && existsSync(options.root) ? options.root : dir;
+				const rel = relative(root, dir);
+				if (rel.startsWith("..")) throw new Error("The folder to deploy must be inside the project");
 				if (options.build) {
 					await this.build(root, log);
 					if (!existsSync(dir)) throw new Error(`The build didn't produce ${relative(root, dir) || dir}`);

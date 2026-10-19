@@ -30,8 +30,8 @@ const API = "https://api.cloudflare.com/client/v4";
 const COMPATIBILITY_DATE = "2025-09-01";
 const MAX_FILE = 25 * 1024 * 1024;
 const MAX_FILES = 20_000;
-/** Never uploaded as site files. */
-const SKIP = new Set([".git", "node_modules", ".wrangler", ".DS_Store", ".vercel", ".assetsignore"]);
+/** Never uploaded as site files. Dotfiles are skipped too (secrets like .env, .dev.vars), except .well-known. */
+const SKIP = new Set(["node_modules"]);
 /** Pages reads these from the upload form instead of the file list. */
 const PAGES_SPECIAL = new Set(["_worker.js", "_redirects", "_headers", "_routes.json", "functions"]);
 
@@ -97,11 +97,12 @@ export class Cloudflare {
 		container: { run: Run; available: boolean },
 	): Promise<{ url: string | null }> {
 		const config = readWranglerConfig(dir) ?? (dir === root ? null : readWranglerConfig(root));
-		const name = sanitizeName(options.name || config?.name || basename(dir));
+		// The name typed in the app (only sent when changed), else the config's, else the project folder's.
+		const name = sanitizeName(options.name || config?.name || basename(root));
 		const report = progress(log, `Workers · ${name}`, `https://dash.cloudflare.com/${this.accountId}/workers/services/view/${name}`);
 
 		if (config?.main) {
-			const main = resolve(config.dir, config.main);
+			const main = inside(root, resolve(config.dir, config.main), "The Worker's main file");
 			if (!existsSync(main)) throw new Error(`The Worker's main file is missing: ${config.main}`);
 			const needsBuild = !plainModules(main) || !!config.build || !!config.durable_objects || !!config.migrations;
 			if (needsBuild) {
@@ -131,10 +132,11 @@ export class Cloudflare {
 		try {
 			// The config's assets folder; else the chosen folder, unless that is just the Worker's own project.
 			const assetsDir = config?.assets?.directory
-				? resolve(config.dir, config.assets.directory)
+				? inside(root, resolve(config.dir, config.assets.directory), "The assets folder")
 				: config?.main && dir === config.dir
 					? null
 					: dir;
+			if (assetsDir && !config) notSourceFolder(assetsDir, root);
 			let jwt: string | null = null;
 			if (assetsDir) {
 				if (!existsSync(assetsDir)) throw new Error(`No such assets folder: ${relative(dir, assetsDir) || "."}`);
@@ -168,6 +170,8 @@ export class Cloudflare {
 				const root = dirname(main);
 				metadata.main_module = basename(main);
 				metadata.bindings = workerBindings(config);
+				// Secrets are set separately (wrangler secret put); never drop them on deploy, as wrangler doesn't.
+				metadata.keep_bindings = ["secret_text", "secret_key"];
 				log(`Uploading ${modules.length} module${modules.length === 1 ? "" : "s"}…`);
 				for (const file of modules) {
 					const part = relative(root, file).split(sep).join("/");
@@ -206,8 +210,15 @@ export class Cloudflare {
 
 	/** Uploads what changed of [dir] for Worker [name]; returns the completion token for the script upload. */
 	private async uploadWorkerAssets(name: string, dir: string, log: Log): Promise<string> {
-		const files = listFiles(dir, (rel) => rel === "_headers" || rel === "_redirects");
+		const ignored = assetsIgnore(dir);
+		const files = listFiles(dir, (rel) => rel === "_headers" || rel === "_redirects" || ignored(rel));
 		if (files.length === 0) throw new Error("Nothing to deploy: the folder is empty");
+		// Like wrangler: a Pages-style worker in the assets would be served to anyone as plain text.
+		if (files.some((f) => f === "_worker.js" || f.startsWith("_worker.js/"))) {
+			throw new Error(
+				"The folder has a _worker.js, which Workers would serve publicly as a file. Deploy it to Pages instead, or list _worker.js in .assetsignore.",
+			);
+		}
 		log(`Hashing ${files.length} files…`);
 		const manifest: Record<string, { hash: string; size: number }> = {};
 		const byHash = new Map<string, string>();
@@ -302,6 +313,7 @@ export class Cloudflare {
 				log("Note: the functions folder is skipped; deploying it needs wrangler in the Linux container.");
 			}
 
+			notSourceFolder(dir, root);
 			const files = listFiles(dir, (rel) => PAGES_SPECIAL.has(rel.split("/")[0]));
 			if (files.length === 0) throw new Error("Nothing to deploy: the folder is empty");
 			const { jwt } = await this.api(`/accounts/${this.accountId}/pages/projects/${name}/upload-token`);
@@ -399,7 +411,7 @@ export function listFiles(dir: string, skip: (rel: string) => boolean = () => fa
 	const out: string[] = [];
 	const visit = (sub: string) => {
 		for (const entry of readdirSync(join(dir, sub), { withFileTypes: true })) {
-			if (SKIP.has(entry.name)) continue;
+			if (SKIP.has(entry.name) || (entry.name.startsWith(".") && entry.name !== ".well-known")) continue;
 			const rel = sub ? `${sub}/${entry.name}` : entry.name;
 			if (skip(rel)) continue;
 			if (entry.isDirectory()) visit(rel);
@@ -445,6 +457,59 @@ async function retry<T>(job: () => Promise<T>, attempts = 4): Promise<T> {
 			await sleep(2 ** i * 1000);
 		}
 	}
+}
+
+/** [path], refused when it points outside the project [root] (a config could otherwise reach ~/.ssh). */
+function inside(root: string, path: string, what: string) {
+	const rel = relative(resolve(root), path);
+	if (rel.startsWith("..") || resolve(rel) === rel) throw new Error(`${what} is outside the project folder`);
+	return path;
+}
+
+/** Refuses to publish a project's own source folder (package.json, no wrangler config) as a static site. */
+function notSourceFolder(dir: string, root: string) {
+	if (resolve(dir) === resolve(root) && existsSync(join(root, "package.json"))) {
+		throw new Error(
+			"This is the project's source folder, not its build output, and publishing it would expose the source. " +
+				"Set the folder to the build output (dist, build or out), or turn on Build first.",
+		);
+	}
+}
+
+/** The patterns in [dir]/.assetsignore (gitignore syntax), as wrangler applies them. */
+export function assetsIgnore(dir: string): (rel: string) => boolean {
+	const text = readOptional(join(dir, ".assetsignore"));
+	if (!text) return () => false;
+	const rules = text
+		.split(/\r?\n/)
+		.map((l) => l.trim())
+		.filter((l) => l && !l.startsWith("#"))
+		.map((line) => {
+			const negate = line.startsWith("!");
+			let pattern = negate ? line.slice(1) : line;
+			const dirOnly = pattern.endsWith("/");
+			pattern = pattern.replace(/\/+$/, "");
+			const anchored = pattern.includes("/");
+			pattern = pattern.replace(/^\//, "");
+			let re = "";
+			for (let i = 0; i < pattern.length; i++) {
+				const c = pattern[i];
+				if (c === "*" && pattern[i + 1] === "*") {
+					re += pattern[i + 2] === "/" ? "(?:.*/)?" : ".*";
+					i += pattern[i + 2] === "/" ? 2 : 1;
+				} else if (c === "*") re += "[^/]*";
+				else if (c === "?") re += "[^/]";
+				else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+			}
+			// A match also covers everything under it.
+			const regex = new RegExp(`^${anchored ? "" : "(?:.*/)?"}${re}${dirOnly ? "/.*" : "(?:/.*)?"}$`);
+			return { negate, regex };
+		});
+	return (rel) => {
+		let ignored = false;
+		for (const r of rules) if (r.regex.test(rel)) ignored = !r.negate;
+		return ignored;
+	};
 }
 
 function readOptional(path: string) {

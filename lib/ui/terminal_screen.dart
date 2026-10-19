@@ -283,6 +283,27 @@ class _TerminalScreenState extends State<TerminalScreen> {
     return s;
   }
 
+  /// Closes tab [i]; a shell that is still running is only killed once confirmed.
+  Future<void> _confirmClose(int i) async {
+    final s = sessions[i];
+    if (!s.exited) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(tr('Close this tab?')),
+          content: Text(tr('Its shell is still running and will be stopped.')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Close tab'))),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final index = sessions.indexOf(s);
+    if (index >= 0) _close(index);
+  }
+
   void _close(int i) {
     final s = sessions.removeAt(i);
     s.kill();
@@ -665,12 +686,18 @@ class _TerminalScreenState extends State<TerminalScreen> {
                               decoration: s.exited ? TextDecoration.lineThrough : null,
                             ),
                           ),
-                          InkResponse(
-                            radius: 14,
-                            onTap: () => _close(i),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
-                              child: Icon(LucideIcons.x, size: 13, color: on ? p.inverse : p.muted),
+                          // A full-height target, so it is hard to miss and hard to hit by accident.
+                          Semantics(
+                            button: true,
+                            label: tr('Close tab'),
+                            child: InkResponse(
+                              radius: 18,
+                              onTap: () => _confirmClose(i),
+                              child: SizedBox(
+                                width: 34,
+                                height: 32,
+                                child: Icon(LucideIcons.x, size: 14, color: on ? p.inverse : p.muted),
+                              ),
                             ),
                           ),
                         ],
