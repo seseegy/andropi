@@ -5,6 +5,7 @@ import '../agent/agent_client.dart';
 import '../agent/agent_controller.dart';
 import '../agent/models.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 const _apis = {
@@ -93,8 +94,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
           if (selectAll) _selected.add(m.id);
         }
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Found ${found.length} model${found.length == 1 ? '' : 's'}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Models found')}: ${found.length}')));
     } on AgentError catch (e) {
       if (mounted) setState(() => _problem = 'Could not fetch models: ${e.message}');
     } finally {
@@ -157,11 +157,11 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove ${existing!.name}?'),
-        content: const Text('Its API key and model list are deleted from this device.'),
+        title: Text('${tr('Remove')} ${existing!.name}?'),
+        content: Text(tr('Its API key and model list are deleted from this device.')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Remove'))),
         ],
       ),
     );
@@ -194,7 +194,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
         actions: [
           if (existing != null)
             IconButton(
-              tooltip: 'Remove',
+              tooltip: tr('Remove'),
               onPressed: _saving ? null : _delete,
               icon: Icon(LucideIcons.trash2, size: 18, color: p.danger),
             ),
@@ -209,7 +209,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Name', hintText: 'My proxy'),
+            decoration: InputDecoration(labelText: tr('Name'), hintText: tr('My proxy')),
             onChanged: (v) {
               if (!_idTouched) _id.text = _slug(v);
             },
@@ -219,14 +219,14 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             controller: _id,
             autocorrect: false,
             style: const TextStyle(fontFamily: mono, fontSize: 13),
-            decoration: const InputDecoration(labelText: 'Provider ID', hintText: 'my-proxy'),
+            decoration: InputDecoration(labelText: tr('Provider ID'), hintText: 'my-proxy'),
             onChanged: (_) => _idTouched = true,
           ),
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             initialValue: _api,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'API type'),
+            decoration: InputDecoration(labelText: tr('API type')),
             items: [for (final e in _apis.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
             onChanged: (v) => setState(() => _api = v ?? _api),
           ),
@@ -236,7 +236,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             autocorrect: false,
             keyboardType: TextInputType.url,
             style: const TextStyle(fontFamily: mono, fontSize: 13),
-            decoration: InputDecoration(labelText: 'Base URL', hintText: _urlHints[_api]),
+            decoration: InputDecoration(labelText: tr('Base URL'), hintText: _urlHints[_api]),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -246,7 +246,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             obscureText: !_showKey,
             style: const TextStyle(fontFamily: mono, fontSize: 13),
             decoration: InputDecoration(
-              labelText: 'API key',
+              labelText: tr('API key'),
               hintText: existing?.hasKey == true ? 'Saved. Leave empty to keep it' : 'Optional for local servers',
               suffixIcon: IconButton(
                 onPressed: () => setState(() => _showKey = !_showKey),
@@ -255,7 +255,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Text('The key is stored encrypted on this device.', style: text.bodySmall?.copyWith(color: p.muted)),
+          Text(tr('The key is stored encrypted on this device.'), style: text.bodySmall?.copyWith(color: p.muted)),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: _fetching ? null : _fetch,
@@ -267,15 +267,15 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: Text('Models (${_selected.length} selected)', style: text.titleSmall)),
+              Expanded(child: Text('${tr('Models')} (${_selected.length} ${tr('selected')})', style: text.titleSmall)),
               if (_models.isNotEmpty) ...[
                 TextButton(
                   onPressed: () => setState(() => _selected.addAll(visible.map((m) => m.id))),
-                  child: const Text('All'),
+                  child: Text(tr('All')),
                 ),
                 TextButton(
                   onPressed: () => setState(() => _selected.removeAll(visible.map((m) => m.id))),
-                  child: const Text('None'),
+                  child: Text(tr('None')),
                 ),
               ],
             ],
@@ -284,8 +284,8 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             const SizedBox(height: 6),
             TextField(
               onChanged: (v) => setState(() => _query = v),
-              decoration: const InputDecoration(
-                hintText: 'Search models',
+              decoration: InputDecoration(
+                hintText: tr('Search models'),
                 isDense: true,
                 prefixIcon: Icon(LucideIcons.search, size: 18),
               ),
@@ -295,7 +295,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Fetch the list from the endpoint, or type a model ID below.',
+                tr('Fetch the list from the endpoint, or type a model ID below.'),
                 style: text.bodySmall?.copyWith(color: p.muted),
               ),
             ),
@@ -322,7 +322,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
                   controller: _newModel,
                   autocorrect: false,
                   style: const TextStyle(fontFamily: mono, fontSize: 13),
-                  decoration: const InputDecoration(hintText: 'Add model ID manually', isDense: true),
+                  decoration: InputDecoration(hintText: tr('Add model ID manually'), isDense: true),
                   onSubmitted: (_) => _addModel(),
                 ),
               ),
@@ -334,7 +334,7 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
             Text(_problem!, style: text.bodySmall?.copyWith(color: p.danger)),
           ],
           const SizedBox(height: 20),
-          PrimaryButton(label: 'Save', icon: LucideIcons.check, busy: _saving, onPressed: _save),
+          PrimaryButton(label: tr('Save'), icon: LucideIcons.check, busy: _saving, onPressed: _save),
         ],
       ),
     );

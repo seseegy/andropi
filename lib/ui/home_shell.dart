@@ -701,13 +701,13 @@ class _ConnectCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Connect a model',
+                Text(
+                  tr('Connect a model'),
                   style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Sign in to a provider or add an API key: Anthropic, OpenAI, Gemini, OpenRouter and more.',
+                  tr('Sign in to a provider or add an API key: Anthropic, OpenAI, Gemini, OpenRouter and more.'),
                   style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13, height: 1.45),
                 ),
                 const SizedBox(height: 16),

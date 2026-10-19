@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../agent/agent_controller.dart';
 import '../agent/models.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Runs pi's login for [provider] and renders each step of its interaction
@@ -137,7 +138,7 @@ class _LoginSheetState extends State<_LoginSheet> {
             if (error != null) ...[
               Text(error!, style: text.bodyMedium?.copyWith(color: p.danger)),
               const SizedBox(height: 16),
-              FilledButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Close')),
+              FilledButton(onPressed: () => Navigator.of(context).pop(false), child: Text(tr('Close'))),
             ] else ...[
               if (link != null) ...[_linkPanel(context), const SizedBox(height: 16)],
               if (prompt != null)
@@ -148,7 +149,7 @@ class _LoginSheetState extends State<_LoginSheet> {
                     const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 1.8)),
                     const SizedBox(width: 12),
                     Expanded(child: Text(progress ?? 'Waiting for provider…', style: text.bodyMedium)),
-                    TextButton(onPressed: _cancel, child: const Text('Cancel')),
+                    TextButton(onPressed: _cancel, child: Text(tr('Cancel'))),
                   ],
                 ),
             ],
@@ -197,16 +198,13 @@ class _LoginSheetState extends State<_LoginSheet> {
           Row(
             children: [
               Expanded(
-                child: FilledButton(
-                  onPressed: () => widget.agent.client.openUrl(url),
-                  child: const Text('Open browser'),
-                ),
+                child: FilledButton(onPressed: () => widget.agent.client.openUrl(url), child: Text(tr('Open browser'))),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: isDevice ? e['userCode'] as String : url));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Copied'))));
                 },
                 child: Text(isDevice ? 'Copy code' : 'Copy link'),
               ),
@@ -239,7 +237,7 @@ class _LoginSheetState extends State<_LoginSheet> {
               onTap: () => _answer(o['id'] as String),
             ),
           const SizedBox(height: 8),
-          TextButton(onPressed: _cancel, child: const Text('Cancel')),
+          TextButton(onPressed: _cancel, child: Text(tr('Cancel'))),
         ],
       );
     }
@@ -266,7 +264,7 @@ class _LoginSheetState extends State<_LoginSheet> {
                     onPressed: () => setState(() => obscure = !obscure),
                   )
                 : IconButton(
-                    tooltip: 'Paste',
+                    tooltip: tr('Paste'),
                     icon: const Icon(LucideIcons.clipboardPaste, size: 18),
                     onPressed: () async {
                       final data = await Clipboard.getData('text/plain');
@@ -279,12 +277,12 @@ class _LoginSheetState extends State<_LoginSheet> {
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(onPressed: _cancel, child: const Text('Cancel')),
+              child: OutlinedButton(onPressed: _cancel, child: Text(tr('Cancel'))),
             ),
             const SizedBox(width: 8),
             Expanded(
               // Empty answers are valid for optional fields such as a local server's API key.
-              child: FilledButton(onPressed: () => _answer(field.text.trim()), child: const Text('Continue')),
+              child: FilledButton(onPressed: () => _answer(field.text.trim()), child: Text(tr('Continue'))),
             ),
           ],
         ),

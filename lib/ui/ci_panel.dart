@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Live CI state from the host: GitHub Actions runs → jobs → steps, or a
@@ -73,7 +74,7 @@ class _Run extends StatelessWidget {
                   TextButton(
                     onPressed: () => onOpen!(url),
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: p.muted),
-                    child: const Text('View'),
+                    child: Text(tr('View')),
                   ),
               ],
             ),

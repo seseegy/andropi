@@ -11,6 +11,7 @@ import '../agent/models.dart';
 import 'code_view.dart';
 import 'preview_screen.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 class UserMessageView extends StatelessWidget {
@@ -83,7 +84,7 @@ class AssistantMessageView extends StatelessWidget {
     if (entry.streaming && children.isEmpty) children.add(const _Pending());
     if (entry.error != null) children.add(_ErrorNote(entry.error!));
     if (entry.aborted) {
-      children.add(Text('Stopped', style: Theme.of(context).textTheme.labelMedium?.copyWith(color: p.faint)));
+      children.add(Text(tr('Stopped'), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: p.faint)));
     }
     final reply = [
       for (final b in blocks)
@@ -272,7 +273,7 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
       label: lang.isEmpty ? null : lang,
       language: lang,
       onPreview: previewable
-          ? () => HtmlPreviewScreen.open(navigator.context, title: 'Preview', source: () => text)
+          ? () => HtmlPreviewScreen.open(navigator.context, title: tr('Preview'), source: () => text)
           : null,
     );
   }
@@ -509,12 +510,12 @@ class _ToolCallViewState extends State<ToolCallView> {
                 children: [
                   if (b.toolName == 'write' && liveText != null)
                     _Section(
-                      label: 'Content',
+                      label: tr('Content'),
                       child: CodeBox(text: liveText, label: path?.split('/').last, language: ext, maxHeight: 320),
                     )
                   else
                     _Section(
-                      label: 'Input',
+                      label: tr('Input'),
                       child: CodeBox(
                         text: const JsonEncoder.withIndent('  ').convert(args ?? {}),
                         label: 'json',

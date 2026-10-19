@@ -163,7 +163,7 @@ class _SettingsHubState extends State<SettingsHub> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('AndroPI', style: text.titleLarge),
+                          Text(tr('AndroPI'), style: text.titleLarge),
                           const SizedBox(height: 2),
                           Text(
                             'pi ${agent.info['version'] ?? ''} · Node ${agent.info['node'] ?? ''}',
@@ -209,7 +209,7 @@ class _SettingsHubState extends State<SettingsHub> {
                         : c.installed
                         ? '${c.image}${c.enabled ? ' · agent shell' : ''}'
                         : 'Not installed · run apt, pip, npm and more',
-                    trailing: c?.enabled == true ? Pill('On', color: p.success, dot: true) : null,
+                    trailing: c?.enabled == true ? Pill(tr('On'), color: p.success, dot: true) : null,
                     onTap: () => _open(ContainerScreen(agent: agent)),
                   ),
                   SettingsRow(

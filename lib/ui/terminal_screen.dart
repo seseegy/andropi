@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../agent/agent_controller.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// A shell with the agent's toolchain (git, ssh, node…). Sessions outlive the
@@ -269,11 +270,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rename tab'),
+        title: Text(tr('Rename tab')),
         content: TextField(controller: field, autofocus: true, onSubmitted: (v) => Navigator.of(context).pop(v)),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(context).pop(field.text), child: const Text('Rename')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.of(context).pop(field.text), child: Text(tr('Rename'))),
         ],
       ),
     );
@@ -289,7 +290,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     try {
       final t = await agent.features.detectTests();
       if (t == null) {
-        messenger.showSnackBar(const SnackBar(content: Text('No test setup found')));
+        messenger.showSnackBar(SnackBar(content: Text(tr('No test setup found'))));
         return;
       }
       await _newTab(command: t.command, title: t.framework.isEmpty ? 'tests' : t.framework);
@@ -313,7 +314,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final hosts = agent.integrations.hosts;
     if (hosts.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Add a server under Accounts & servers first')));
+          .showSnackBar(SnackBar(content: Text(tr('Add a server under Accounts & servers first'))));
       return;
     }
     final name = await showModalBottomSheet<String>(
@@ -341,7 +342,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   Future<void> _historySheet() async {
     final items = ShellSession.history;
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No commands yet')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('No commands yet'))));
       return;
     }
     final command = await showModalBottomSheet<String>(
@@ -354,7 +355,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
             shrinkWrap: true,
             padding: const EdgeInsets.only(bottom: 8),
             children: [
-              const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 0), child: SectionLabel('Command history')),
+              Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 0), child: SectionLabel(tr('Command history'))),
               for (final c in items)
                 ListTile(
                   dense: true,
@@ -389,7 +390,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Terminal'),
+            Text(tr('Terminal')),
             if (s != null)
               Text(
                 s.linux ? 'Linux container' : s.cwd.replaceFirst(RegExp(r'^.*/files/home'), '~'),
@@ -399,25 +400,33 @@ class _TerminalScreenState extends State<TerminalScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Command history',
+            tooltip: tr('Command history'),
             icon: const Icon(LucideIcons.history, size: 20),
             onPressed: _historySheet,
           ),
-          IconButton(tooltip: 'SSH to a server', icon: const Icon(LucideIcons.server, size: 20), onPressed: _sshMenu),
-          IconButton(tooltip: 'Restart shell', icon: const Icon(LucideIcons.rotateCcw, size: 20), onPressed: _restart),
+          IconButton(
+            tooltip: tr('SSH to a server'),
+            icon: const Icon(LucideIcons.server, size: 20),
+            onPressed: _sshMenu,
+          ),
+          IconButton(
+            tooltip: tr('Restart shell'),
+            icon: const Icon(LucideIcons.rotateCcw, size: 20),
+            onPressed: _restart,
+          ),
           const SizedBox(width: 4),
         ],
         bottom: PreferredSize(preferredSize: const Size.fromHeight(49), child: _tabStrip(p)),
       ),
       body: error != null && s == null
-          ? Center(child: Text('Could not start a shell: $error'))
+          ? Center(child: Text('${tr('Could not start a shell')}: $error'))
           : s == null
           ? starting
                 ? const Center(child: SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)))
                 : Center(
                     child: SizedBox(
                       width: 220,
-                      child: PrimaryButton(label: 'New shell', icon: LucideIcons.plus, onPressed: () => _newTab()),
+                      child: PrimaryButton(label: tr('New shell'), icon: LucideIcons.plus, onPressed: () => _newTab()),
                     ),
                   )
           : Column(
@@ -516,21 +525,21 @@ class _TerminalScreenState extends State<TerminalScreen> {
                   },
                 ),
               PopupMenuButton<String>(
-                tooltip: 'New tab',
+                tooltip: tr('New tab'),
                 position: PopupMenuPosition.under,
                 onSelected: (v) => switch (v) {
                   'linux' => _newTab(command: 'box', linux: true),
                   'tests' => _runTests(),
                   _ => _newTab(),
                 },
-                itemBuilder: (context) => const [
+                itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'android',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(LucideIcons.smartphone, size: 18),
-                      title: Text('Android shell'),
+                      title: Text(tr('Android shell')),
                     ),
                   ),
                   PopupMenuItem(
@@ -539,7 +548,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(LucideIcons.box, size: 18),
-                      title: Text('Linux shell (box)'),
+                      title: Text(tr('Linux shell (box)')),
                     ),
                   ),
                   PopupMenuItem(
@@ -548,7 +557,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(LucideIcons.flaskConical, size: 18),
-                      title: Text('Run tests'),
+                      title: Text(tr('Run tests')),
                     ),
                   ),
                 ],

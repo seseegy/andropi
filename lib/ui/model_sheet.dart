@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../agent/agent_controller.dart';
 import '../agent/models.dart';
 import 'settings_screen.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 Future<void> showModelSheet(BuildContext context, AgentController agent) {
@@ -55,13 +56,13 @@ class _ModelSheetState extends State<_ModelSheet> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Row(
                   children: [
-                    Expanded(child: Text('Model', style: text.titleLarge)),
+                    Expanded(child: Text(tr('Model'), style: text.titleLarge)),
                     TextButton(
                       onPressed: () {
                         final nav = Navigator.of(context)..pop();
                         nav.push(MaterialPageRoute(builder: (_) => SettingsScreen(agent: agent)));
                       },
-                      child: const Text('Providers'),
+                      child: Text(tr('Providers')),
                     ),
                   ],
                 ),
@@ -70,8 +71,8 @@ class _ModelSheetState extends State<_ModelSheet> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: TextField(
                   onChanged: (v) => setState(() => query = v),
-                  decoration: const InputDecoration(
-                    hintText: 'Search models',
+                  decoration: InputDecoration(
+                    hintText: tr('Search models'),
                     prefixIcon: Icon(LucideIcons.search, size: 18),
                   ),
                 ),
@@ -82,7 +83,7 @@ class _ModelSheetState extends State<_ModelSheet> {
                         child: Padding(
                           padding: const EdgeInsets.all(32),
                           child: Text(
-                            'No models yet. Connect a provider to see its models here.',
+                            tr('No models yet. Connect a provider to see its models here.'),
                             style: text.bodyMedium?.copyWith(color: p.muted),
                             textAlign: TextAlign.center,
                           ),

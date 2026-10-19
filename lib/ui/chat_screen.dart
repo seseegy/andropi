@@ -199,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
       input.selection = TextSelection.collapsed(offset: input.text.length);
       focus.requestFocus();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Voice input: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Voice input')}: $e')));
     }
   }
 

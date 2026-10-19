@@ -148,7 +148,7 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                 ],
               ),
               if (recent.isNotEmpty) ...[
-                const SectionLabel('Recent projects', padding: EdgeInsets.fromLTRB(4, 20, 4, 8)),
+                SectionLabel(tr('Recent projects'), padding: EdgeInsets.fromLTRB(4, 20, 4, 8)),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Splits a unified diff (possibly covering several files) into one patch per file.
@@ -156,7 +157,7 @@ class DiffView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
         decoration: BoxDecoration(color: p.surface, borderRadius: BorderRadius.circular(16)),
         alignment: Alignment.center,
-        child: Text('No changes', style: Theme.of(context).textTheme.bodySmall),
+        child: Text(tr('No changes'), style: Theme.of(context).textTheme.bodySmall),
       );
     }
     final files = [for (final f in splitPatch(patch)) _parse(f.path, f.patch)];

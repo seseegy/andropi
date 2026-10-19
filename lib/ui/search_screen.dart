@@ -8,6 +8,7 @@ import '../agent/features.dart';
 import 'editor_screen.dart';
 import 'illustration.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Project-wide search (ripgrep on the host), grouped by file; a match opens
@@ -117,7 +118,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final pattern = _pattern();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Search')),
+      appBar: AppBar(title: Text(tr('Search'))),
       body: Column(
         children: [
           Padding(
@@ -128,7 +129,7 @@ class _SearchScreenState extends State<SearchScreen> {
               textInputAction: TextInputAction.search,
               style: const TextStyle(fontFamily: mono, fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'Search in project',
+                hintText: tr('Search in project'),
                 prefixIcon: const Icon(LucideIcons.search, size: 18),
                 suffixIcon: busy
                     ? const Padding(
@@ -156,7 +157,7 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
                 _Toggle(
-                  label: 'Regex',
+                  label: tr('Regex'),
                   icon: LucideIcons.regex,
                   on: regex,
                   onTap: () {
@@ -166,7 +167,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 const SizedBox(width: 8),
                 _Toggle(
-                  label: 'Match case',
+                  label: tr('Match case'),
                   icon: LucideIcons.caseSensitive,
                   on: matchCase,
                   onTap: () {

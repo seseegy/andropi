@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../agent/agent_controller.dart';
 import '../agent/features.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// A small SQLite browser: tables with row counts, a data grid, and a SQL
@@ -126,7 +127,7 @@ class _DbScreenState extends State<DbScreen> {
           ),
           actions: [
             IconButton(
-              tooltip: 'Reload',
+              tooltip: tr('Reload'),
               icon: const Icon(LucideIcons.rotateCcw, size: 20),
               onPressed: () {
                 _loadTables();
@@ -182,7 +183,7 @@ class _DbScreenState extends State<DbScreen> {
     if (list == null) return const _Spinner();
     if (list.isEmpty) {
       return Center(
-        child: Text('No tables in this database', style: text.bodyMedium?.copyWith(color: p.muted)),
+        child: Text(tr('No tables in this database'), style: text.bodyMedium?.copyWith(color: p.muted)),
       );
     }
     return ListView(
@@ -218,7 +219,7 @@ class _DbScreenState extends State<DbScreen> {
             maxLines: 8,
             keyboardType: TextInputType.multiline,
             style: const TextStyle(fontFamily: mono, fontSize: 13),
-            decoration: const InputDecoration(hintText: 'SELECT * FROM ...'),
+            decoration: InputDecoration(hintText: tr('SELECT * FROM ...')),
           ),
         ),
         Padding(
@@ -255,7 +256,7 @@ class _DbScreenState extends State<DbScreen> {
               const SizedBox(width: 8),
               SizedBox(
                 width: 110,
-                child: PrimaryButton(label: 'Run', icon: LucideIcons.play, busy: sqlBusy, onPressed: _runSql),
+                child: PrimaryButton(label: tr('Run'), icon: LucideIcons.play, busy: sqlBusy, onPressed: _runSql),
               ),
             ],
           ),
@@ -269,7 +270,7 @@ class _DbScreenState extends State<DbScreen> {
               : r == null
               ? Center(
                   child: Text(
-                    'Run a query to see results',
+                    tr('Run a query to see results'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: p.muted),
                   ),
                 )
@@ -456,9 +457,9 @@ class _Grid extends StatelessWidget {
               Clipboard.setData(ClipboardData(text: value));
               Navigator.of(context).pop();
             },
-            child: const Text('Copy'),
+            child: Text(tr('Copy')),
           ),
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Close'))),
         ],
       ),
     );

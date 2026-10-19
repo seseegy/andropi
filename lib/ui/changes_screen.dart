@@ -6,6 +6,7 @@ import '../agent/features.dart';
 import 'diff_view.dart';
 import 'illustration.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 String _ago(DateTime t) {
@@ -125,14 +126,14 @@ class _ChangesScreenState extends State<ChangesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Undo these changes?'),
+        title: Text(tr('Undo these changes?')),
         content: Text(
           'Files will be put back the way they were at "${cp.label}". '
           'The current state is saved as a checkpoint first, so you can undo this again.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Undo changes')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Undo changes'))),
         ],
       ),
     );
@@ -141,7 +142,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
     try {
       await _f.restore(cp.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restored "${cp.label}"')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Restored')} "${cp.label}"')));
       setState(() => _selected = null);
       await _refresh();
     } catch (e) {
@@ -156,16 +157,16 @@ class _ChangesScreenState extends State<ChangesScreen> {
     final label = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Create checkpoint'),
+        title: Text(tr('Create checkpoint')),
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Label, e.g. Before refactor'),
+          decoration: InputDecoration(hintText: tr('Label, e.g. Before refactor')),
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, ctrl.text), child: const Text('Create')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text), child: Text(tr('Create'))),
         ],
       ),
     );
@@ -175,7 +176,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
     try {
       await _f.createCheckpoint(l);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Checkpoint "$l" saved')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Checkpoint saved')}: "$l"')));
       setState(() => _selected = null);
       await _refresh();
     } catch (e) {
@@ -188,10 +189,10 @@ class _ChangesScreenState extends State<ChangesScreen> {
     final list = _checkpoints;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Changes'),
+        title: Text(tr('Changes')),
         actions: [
-          IconButton(tooltip: 'Create checkpoint', icon: const Icon(LucideIcons.bookmarkPlus), onPressed: _create),
-          IconButton(tooltip: 'Refresh', icon: const Icon(LucideIcons.refreshCw), onPressed: _refresh),
+          IconButton(tooltip: tr('Create checkpoint'), icon: const Icon(LucideIcons.bookmarkPlus), onPressed: _create),
+          IconButton(tooltip: tr('Refresh'), icon: const Icon(LucideIcons.refreshCw), onPressed: _refresh),
         ],
       ),
       body: list == null
@@ -208,10 +209,10 @@ class _ChangesScreenState extends State<ChangesScreen> {
       children: [
         const Illustration('git', height: 160),
         const SizedBox(height: 20),
-        Text('No checkpoints yet', textAlign: TextAlign.center, style: text.titleMedium),
+        Text(tr('No checkpoints yet'), textAlign: TextAlign.center, style: text.titleMedium),
         const SizedBox(height: 6),
         Text(
-          'Checkpoints appear when the agent starts changing files',
+          tr('Checkpoints appear when the agent starts changing files'),
           textAlign: TextAlign.center,
           style: text.bodySmall,
         ),
@@ -220,7 +221,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
           child: OutlinedButton.icon(
             onPressed: _create,
             icon: const Icon(LucideIcons.bookmarkPlus, size: 16),
-            label: const Text('Create checkpoint now'),
+            label: Text(tr('Create checkpoint now')),
           ),
         ),
       ],
@@ -238,7 +239,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
       children: [
-        const SectionLabel('Checkpoints', padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
+        SectionLabel(tr('Checkpoints'), padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
         SizedBox(
           height: 64,
           child: ListView.separated(
@@ -267,7 +268,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Changes since', style: text.bodySmall),
+                          Text(tr('Changes since'), style: text.bodySmall),
                           Text(cp.label, maxLines: 2, overflow: TextOverflow.ellipsis, style: text.titleMedium),
                         ],
                       ),
@@ -289,7 +290,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
                 ),
                 const SizedBox(height: 16),
                 PrimaryButton(
-                  label: 'Undo these changes',
+                  label: tr('Undo these changes'),
                   icon: LucideIcons.undo2,
                   busy: _busy,
                   onPressed: changes == null || changes.files.isEmpty ? null : _undo,
@@ -297,7 +298,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
               ],
             ),
           ),
-        const SectionLabel('Files'),
+        SectionLabel(tr('Files')),
         if (_loadingChanges && changes == null)
           const Padding(
             padding: EdgeInsets.all(32),
@@ -309,7 +310,7 @@ class _ChangesScreenState extends State<ChangesScreen> {
               children: [
                 Icon(LucideIcons.check, size: 18, color: p.success),
                 const SizedBox(width: 10),
-                Expanded(child: Text('Nothing changed since this checkpoint', style: text.bodyMedium)),
+                Expanded(child: Text(tr('Nothing changed since this checkpoint'), style: text.bodyMedium)),
               ],
             ),
           )

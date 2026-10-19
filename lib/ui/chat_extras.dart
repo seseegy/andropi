@@ -240,7 +240,7 @@ class ApprovalCards extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Allow ${a.toolName}?', style: text.titleSmall),
+                          Text('${tr('Allow')} ${a.toolName}?', style: text.titleSmall),
                           Text(a.reason, style: text.bodySmall),
                         ],
                       ),
@@ -373,7 +373,7 @@ class _DevServerBannerState extends State<DevServerBanner> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Public link copied: $url'),
+            content: Text('${tr('Public link copied')}: $url'),
             action: SnackBarAction(label: tr('Open'), onPressed: () => widget.agent.client.openUrl(url)),
           ),
         );
