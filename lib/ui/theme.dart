@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'predictive_back.dart';
+
 /// Design tokens. Clean and light by default: white canvas, soft grey
 /// surfaces, near-black for primary actions, and colour only in accents and
 /// the mesh artwork on cards.
@@ -422,38 +424,4 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {TargetPlatform.android: SmoothPageTransitions()}),
   );
-}
-
-/// Pages glide in: a short slide from the right with a fade, while the page
-/// underneath eases back and dims a little.
-class SmoothPageTransitions extends PageTransitionsBuilder {
-  const SmoothPageTransitions();
-
-  @override
-  Duration get transitionDuration => const Duration(milliseconds: 380);
-
-  @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 300);
-
-  @override
-  Widget buildTransitions<T>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    final enter = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
-    final under = CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeOutCubic);
-    return SlideTransition(
-      position: Tween(begin: Offset.zero, end: const Offset(-0.08, 0)).animate(under),
-      child: FadeTransition(
-        opacity: Tween(begin: 1.0, end: 0.6).animate(under),
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0.18, 0), end: Offset.zero).animate(enter),
-          child: FadeTransition(opacity: enter, child: child),
-        ),
-      ),
-    );
-  }
 }
