@@ -74,6 +74,18 @@ flutter build appbundle --flavor play --release --target-platform android-arm,an
 Steps 1 and 2 generate files that are not in the repository (`jniLibs/`, `agent.zip`). Run them again after you
 change `tool/` or `agent/`.
 
+## Releases and updates
+
+Every push to `main` runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the `full`
+APKs (one per ABI), signs them with the release key from the repository secrets (`KEYSTORE_BASE64`,
+`KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`) and publishes a GitHub release. The version is the one in
+`pubspec.yaml` with the patch and build numbers raised by the workflow run number, so every release is newer than
+the last and installs over it.
+
+The GitHub build checks this repository's latest release (Settings → About → App updates, and on its own every few
+hours). The APK is downloaded by Android's download manager, so it keeps going when the app is closed and can be
+cancelled at any time; its SHA-256 is checked before the installer opens. The Play build leaves updates to Play.
+
 ## Layout
 
 | Path | What it is |

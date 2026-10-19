@@ -32,6 +32,7 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         const val ACTION_NEW_CHAT = "com.imtaqin.andropi.NEW_CHAT"
         const val ACTION_VOICE = "com.imtaqin.andropi.VOICE"
+        const val ACTION_UPDATE = "com.imtaqin.andropi.UPDATE"
         private const val VOICE_REQUEST = 4101
         private const val UPDATES_CHANNEL = "updates"
     }
@@ -55,6 +56,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+        Updater.register(this, messenger)
 
         EventChannel(messenger, "andropi/agent/events").setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
@@ -220,6 +222,7 @@ class MainActivity : FlutterFragmentActivity() {
         val launch: Map<String, Any?> = when (intent?.action) {
             ACTION_NEW_CHAT -> mapOf("action" to "new_chat")
             ACTION_VOICE -> mapOf("action" to "voice")
+            ACTION_UPDATE -> mapOf("action" to "update")
             Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE -> {
                 val uris = mutableListOf<Uri>()
                 @Suppress("DEPRECATION")

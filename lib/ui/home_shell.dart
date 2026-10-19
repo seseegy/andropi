@@ -9,6 +9,7 @@ import 'package:simple_icons/simple_icons.dart';
 import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import '../agent/models.dart';
+import '../agent/updater.dart';
 import 'i18n.dart';
 import 'accounts_screen.dart';
 import 'chat_extras.dart';
@@ -24,6 +25,7 @@ import 'settings_screen.dart';
 import 'skills_screen.dart';
 import 'tasks_screen.dart';
 import 'theme.dart';
+import 'update_sheet.dart';
 
 /// Opens the chat for the agent's current session.
 Future<void> openChat(
@@ -85,6 +87,46 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     agent.client.requestNotifications().catchError((_) {});
     // The app may have been opened by a share, the widget or the tile.
     WidgetsBinding.instance.addPostFrameCallback((_) => _takeLaunch());
+    subs.add(
+      Updater.instance.readyToInstall.stream.listen((_) {
+        if (!_inBackground && mounted) showUpdateSheet(context, agent);
+      }),
+    );
+    _startUpdates();
+  }
+
+  /// Picks up an update download from an earlier run, then checks GitHub now and then.
+  Future<void> _startUpdates() async {
+    final updater = Updater.instance;
+    final justUpdated = await updater.init();
+    if (!mounted || !updater.supported) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (justUpdated != null) {
+      messenger.showSnackBar(SnackBar(content: Text('${tr('Updated to')} $justUpdated')));
+    }
+    switch (updater.phase) {
+      case UpdatePhase.ready:
+        await showUpdateSheet(context, agent);
+        return;
+      case UpdatePhase.downloading || UpdatePhase.failed:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                updater.phase == UpdatePhase.failed ? 'The update download failed' : 'The update is still downloading',
+              ),
+            ),
+            action: SnackBarAction(label: tr('View'), onPressed: () => showUpdateSheet(context, agent)),
+          ),
+        );
+        return;
+      default:
+    }
+    if (!updater.dueForAutoCheck) return;
+    // Let the app settle (and the agent boot) before going to the network.
+    await Future<void>.delayed(const Duration(seconds: 4));
+    await updater.check();
+    if (mounted && !_inBackground && updater.shouldPrompt) await showUpdateSheet(context, agent);
   }
 
   @override
@@ -98,7 +140,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) => lifecycle = state;
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    lifecycle = state;
+    if (state == AppLifecycleState.resumed) Updater.instance.onResume().catchError((_) {});
+  }
 
   /// Approvals that arrive while the app is in the background become notifications.
   void _onFeatures() {
@@ -117,6 +162,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     switch (launch['action']) {
       case 'new_chat':
         await _newChat();
+      case 'update':
+        if (mounted) await showUpdateSheet(context, agent);
       case 'voice':
         await agent.newSession();
         if (mounted) await openChat(context, agent, listen: true);
