@@ -7,8 +7,8 @@
  * container, which has npm.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, extname, join, normalize, relative, resolve, sep } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import mime from "mime-types";
@@ -48,8 +48,9 @@ export class Cloudflare {
 
 	static async request(token: string, path: string, init: RequestInit = {}, auth = `Bearer ${token}`) {
 		const res = await fetch(path.startsWith("http") ? path : `${API}${path}`, {
-			// Generous for big uploads on mobile data, but a stalled connection still ends.
-			signal: AbortSignal.timeout(180_000),
+			// A minute, plus time for the body at a slow 25 KB/s: big uploads on poor mobile data still finish,
+			// a stalled connection still ends.
+			signal: AbortSignal.timeout(Math.round(60_000 + (bodySize(init.body) / 25_000) * 1000)),
 			...init,
 			headers: {
 				Authorization: auth,
@@ -110,15 +111,19 @@ export class Cloudflare {
 		container: { run: Run; available: boolean },
 	): Promise<{ url: string | null }> {
 		const config = readWranglerConfig(dir) ?? (dir === root ? null : readWranglerConfig(root));
-		// The name typed in the app (only sent when changed), else the config's, else the project folder's.
-		const name = sanitizeName(options.name || config?.name || basename(root));
+		// The name typed in the app (only sent when changed), else the config's as written, else the project folder's.
+		const name = options.name
+			? sanitizeName(options.name)
+			: config?.name && WORKER_NAME.test(config.name)
+				? config.name
+				: sanitizeName(config?.name || basename(root));
 		const report = progress(log, `Workers · ${name}`, `https://dash.cloudflare.com/${this.accountId}/workers/services/view/${name}`);
 
 		// Anything the direct upload can't do exactly as wrangler would goes to wrangler, rather than half-deploying.
 		const unsupported = config ? Object.keys(config).filter((k) => !DIRECT_KEYS.has(k)) : [];
 		let main: string | null = null;
 		if (config?.main) {
-			main = inside(root, resolve(config.dir, config.main), "The Worker's main file");
+			main = resolve(config.dir, config.main);
 			if (!existsSync(main)) throw new Error(`The Worker's main file is missing: ${config.main}`);
 		}
 		const needsBuild = (main !== null && !plainModules(main)) || unsupported.length > 0;
@@ -136,7 +141,8 @@ export class Cloudflare {
 			try {
 				const out = await container.run(
 					"box",
-					["-c", `npx --yes wrangler@4 deploy --name ${name}`],
+					// The config's own name stays wrangler's business, unless one was typed (or there is none).
+					["-c", `npx --yes wrangler@4 deploy${options.name || !config.name ? ` --name ${name}` : ""}`],
 					{ cwd: config.dir, log },
 				);
 				report("success");
@@ -155,7 +161,8 @@ export class Cloudflare {
 				: config?.main && dir === config.dir
 					? null
 					: dir;
-			if (assetsDir && !config) notSourceFolder(assetsDir, root);
+			if (assetsDir && !config?.assets?.directory) notSourceFolder(assetsDir, root);
+			if (assetsDir) inside(root, assetsDir, "The folder to deploy");
 			let jwt: string | null = null;
 			if (assetsDir) {
 				if (!existsSync(assetsDir)) throw new Error(`No such assets folder: ${relative(dir, assetsDir) || "."}`);
@@ -167,6 +174,7 @@ export class Cloudflare {
 			const metadata: Record<string, any> = {
 				compatibility_date: config?.compatibility_date ?? COMPATIBILITY_DATE,
 				...(config?.compatibility_flags && { compatibility_flags: config.compatibility_flags }),
+				...(config?.observability !== undefined && { observability: config.observability }),
 			};
 			if (jwt) {
 				const headers = assetsDir && readOptional(join(assetsDir, "_headers"));
@@ -183,17 +191,18 @@ export class Cloudflare {
 					},
 				};
 			}
-			if (config?.main) {
-				const main = resolve(config.dir, config.main);
+			if (config?.main && main) {
 				const modules = plainModules(main)!;
-				const root = dirname(main);
+				for (const file of modules) inside(root, file, "The Worker's code");
+				const moduleRoot = dirname(main);
 				metadata.main_module = basename(main);
 				metadata.bindings = workerBindings(config);
 				// Secrets are set separately (wrangler secret put); never drop them on deploy, as wrangler doesn't.
-				metadata.keep_bindings = ["secret_text", "secret_key"];
+				// keep_vars keeps the dashboard's variables too.
+				metadata.keep_bindings = ["secret_text", "secret_key", ...(config.keep_vars ? ["plain_text", "json"] : [])];
 				log(`Uploading ${modules.length} module${modules.length === 1 ? "" : "s"}…`);
 				for (const file of modules) {
-					const part = relative(root, file).split(sep).join("/");
+					const part = relative(moduleRoot, file).split(sep).join("/");
 					form.set(part, new File([readFileSync(file)], part, { type: "application/javascript+module" }));
 				}
 			}
@@ -208,19 +217,30 @@ export class Cloudflare {
 			// first: a new account may not have one yet (10007), and the Worker is deployed either way.
 			let url: string | null = null;
 			if (config?.workers_dev !== false) {
+				// The Worker is live by now: a hiccup here is reported, not turned into a failed deploy.
 				let subdomain: string | null = null;
+				let lookupFailed = false;
 				try {
-					subdomain = (await this.api(`/accounts/${this.accountId}/workers/subdomain`))?.subdomain ?? null;
+					subdomain = (await retry(() => this.api(`/accounts/${this.accountId}/workers/subdomain`)))?.subdomain ?? null;
 				} catch (e) {
-					if ((e as any).code !== 10007) throw e;
+					if ((e as any).code !== 10007) {
+						lookupFailed = true;
+						log(`Deployed, but its workers.dev address couldn't be set up: ${(e as Error).message}`);
+					}
 				}
 				if (subdomain) {
-					await this.api(`/accounts/${this.accountId}/workers/scripts/${name}/subdomain`, {
-						method: "POST",
-						body: JSON.stringify({ enabled: true, previews_enabled: config?.preview_urls ?? true }),
-					});
+					await retry(() =>
+						this.api(`/accounts/${this.accountId}/workers/scripts/${name}/subdomain`, {
+							method: "POST",
+							body: JSON.stringify({
+								enabled: true,
+								// Unset leaves it to Cloudflare, as wrangler does.
+								...(config?.preview_urls !== undefined && { previews_enabled: config.preview_urls }),
+							}),
+						}),
+					);
 					url = `https://${name}.${subdomain}.workers.dev`;
-				} else {
+				} else if (!lookupFailed) {
 					log(
 						"Deployed. This account has no workers.dev subdomain yet: pick one in the Cloudflare dashboard (Workers & Pages), then deploy again to get a URL.",
 					);
@@ -344,6 +364,9 @@ export class Cloudflare {
 			const workerIsDir = existsSync(worker) && statSync(worker).isDirectory();
 			const workerModules = existsSync(worker) && !workerIsDir ? plainModules(worker) : [];
 			const functions = existsSync(join(root, "functions"));
+			// Before wrangler too: wrangler pages publishes dotfiles and all.
+			notSourceFolder(dir, root);
+			inside(root, dir, "The folder to deploy");
 			if (functions || workerIsDir || workerModules === null) {
 				if (!container.available && (workerIsDir || workerModules === null)) {
 					throw new Error(
@@ -369,7 +392,6 @@ export class Cloudflare {
 				log("Note: the functions folder is skipped; deploying it needs wrangler in the Linux container.");
 			}
 
-			notSourceFolder(dir, root);
 			const files = listFiles(dir, (rel) => PAGES_SPECIAL.has(rel.split("/")[0]));
 			if (files.length === 0) throw new Error("Nothing to deploy: the folder is empty");
 			// The upload token is short-lived: fetch a fresh one when it has expired or is refused, as wrangler does.
@@ -541,11 +563,33 @@ async function retry<T>(job: () => Promise<T>, attempts = 4): Promise<T> {
 	}
 }
 
-/** [path], refused when it points outside the project [root] (a config could otherwise reach ~/.ssh). */
-function inside(root: string, path: string, what: string) {
-	const rel = relative(resolve(root), path);
-	if (rel.startsWith("..") || resolve(rel) === rel) throw new Error(`${what} is outside the project folder`);
+/**
+ * [path], refused when it points outside the project [root] (a config could otherwise reach ~/.ssh). Symlinks are
+ * resolved first, so a linked folder can't lead outside either.
+ */
+export function inside(root: string, path: string, what: string) {
+	const real = (p: string) => {
+		try {
+			return realpathSync(p);
+		} catch {
+			return resolve(p);
+		}
+	};
+	const rel = relative(real(root), real(path));
+	if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`${what} is outside the project folder`);
 	return path;
+}
+
+/** Bytes in a request body, for its timeout. */
+function bodySize(body: unknown): number {
+	if (typeof body === "string") return Buffer.byteLength(body);
+	if (body instanceof Uint8Array) return body.byteLength;
+	if (body instanceof FormData) {
+		let size = 0;
+		for (const [, v] of body.entries()) size += typeof v === "string" ? Buffer.byteLength(v) : v.size;
+		return size;
+	}
+	return 0;
 }
 
 /** Refuses to publish a project's own source folder (package.json, no wrangler config) as a static site. */
@@ -564,11 +608,12 @@ export function assetsIgnore(dir: string): (rel: string) => boolean {
 	if (!text) return () => false;
 	const rules = text
 		.split(/\r?\n/)
-		.map((l) => l.trim())
+		.map((l) => l.replace(/(?<!\\)\s+$/, ""))
 		.filter((l) => l && !l.startsWith("#"))
 		.map((line) => {
 			const negate = line.startsWith("!");
-			let pattern = negate ? line.slice(1) : line;
+			// "\#" and "\!" stand for a literal # or ! at the start.
+			let pattern = negate ? line.slice(1) : line.replace(/^\\([#!])/, "$1");
 			const dirOnly = pattern.endsWith("/");
 			pattern = pattern.replace(/\/+$/, "");
 			const anchored = pattern.includes("/");
@@ -576,21 +621,34 @@ export function assetsIgnore(dir: string): (rel: string) => boolean {
 			let re = "";
 			for (let i = 0; i < pattern.length; i++) {
 				const c = pattern[i];
-				if (c === "*" && pattern[i + 1] === "*") {
+				if (c === "\\" && i + 1 < pattern.length) {
+					re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+				} else if (c === "*" && pattern[i + 1] === "*") {
 					re += pattern[i + 2] === "/" ? "(?:.*/)?" : ".*";
 					i += pattern[i + 2] === "/" ? 2 : 1;
 				} else if (c === "*") re += "[^/]*";
 				else if (c === "?") re += "[^/]";
-				else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+				else if (c === "[" && pattern.indexOf("]", i + 2) > 0) {
+					// A character class, [!abc] negated as in git.
+					const close = pattern.indexOf("]", i + 2);
+					const body = pattern.slice(i + 1, close).replace(/^!/, "^").replace(/\\/g, "\\\\");
+					re += `[${body}]`;
+					i = close;
+				} else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
 			}
-			// A match also covers everything under it.
-			const regex = new RegExp(`^${anchored ? "" : "(?:.*/)?"}${re}${dirOnly ? "/.*" : "(?:/.*)?"}$`);
-			return { negate, regex };
+			return { negate, dirOnly, regex: new RegExp(`^${anchored ? "" : "(?:.*/)?"}${re}$`) };
 		});
-	return (rel) => {
+	const match = (path: string, isDir: boolean) => {
 		let ignored = false;
-		for (const r of rules) if (r.regex.test(rel)) ignored = !r.negate;
+		for (const r of rules) if ((!r.dirOnly || isDir) && r.regex.test(path)) ignored = !r.negate;
 		return ignored;
+	};
+	// As in git: inside an ignored folder nothing can be brought back.
+	return (rel) => {
+		const parts = rel.split("/");
+		for (let i = 1; i < parts.length; i++) if (match(parts.slice(0, i).join("/"), true)) return true;
+		// Files under an ignored folder are caught above, so a path is matched here as a file.
+		return match(rel, false);
 	};
 }
 
@@ -677,7 +735,12 @@ const DIRECT_KEYS = new Set([
 	"env",
 	"send_metrics",
 	"keep_vars",
+	// Passed through as is, as wrangler does.
+	"observability",
 ]);
+
+/** Names wrangler accepts for a Worker; a config's name that fits is used exactly as written. */
+const WORKER_NAME = /^[a-z0-9_][a-z0-9-_]*$/;
 
 export interface WranglerConfig {
 	/** The folder the config file is in; its paths are relative to it. */
@@ -688,6 +751,8 @@ export interface WranglerConfig {
 	compatibility_flags?: string[];
 	workers_dev?: boolean;
 	preview_urls?: boolean;
+	keep_vars?: boolean;
+	observability?: unknown;
 	assets?: {
 		directory?: string;
 		binding?: string;
@@ -757,6 +822,32 @@ function workerBindings(config: WranglerConfig) {
 	return bindings;
 }
 
+/** [source] without line and block comments; strings and template literals are left alone. */
+function stripComments(source: string) {
+	let out = "";
+	for (let i = 0; i < source.length; i++) {
+		const c = source[i];
+		if (c === '"' || c === "'" || c === "`") {
+			const start = i;
+			for (i++; i < source.length && source[i] !== c; i++) if (source[i] === "\\") i++;
+			out += source.slice(start, i + 1);
+		} else if (c === "/" && source[i + 1] === "/") {
+			while (i < source.length && source[i] !== "\n") i++;
+			out += "\n";
+		} else if (c === "/" && source[i + 1] === "*") {
+			const end = source.indexOf("*/", i + 2);
+			i = end < 0 ? source.length : end + 1;
+			out += " ";
+		} else out += c;
+	}
+	return out;
+}
+
+/** [source] (comments already stripped) with the contents of strings and template literals blanked. */
+function blankStrings(source: string) {
+	return source.replace(/(["'`])(?:\\.|(?!\1)[^\\])*\1/gs, (m) => m[0] + " ".repeat(Math.max(0, m.length - 2)) + m[0]);
+}
+
 const IMPORT = /(?:^|[\s;}])(?:import|export)\s*(?:[^'"`;]*?\s*from\s*)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
 
 /**
@@ -770,9 +861,10 @@ export function plainModules(main: string): string[] | null {
 		if (seen.has(file)) return true;
 		if (!/\.(m?js)$/.test(file) || !existsSync(file)) return false;
 		seen.add(file);
-		const source = readFileSync(file, "utf8");
-		// CommonJS and computed imports can't be followed: leave those to a bundler.
-		if (/\brequire\s*\(|\bimport\s*\(\s*[^"'\s]/.test(source)) return false;
+		const source = stripComments(readFileSync(file, "utf8"));
+		// CommonJS and computed imports can't be followed: leave those to a bundler. Strings are blanked first, so
+		// a mention of require() in text doesn't count.
+		if (/(^|[^.\w$])require\s*\(|(^|[^.\w$])import\s*\(\s*[^"'\s]/.test(blankStrings(source))) return false;
 		for (const m of source.matchAll(IMPORT)) {
 			const spec = m[1] ?? m[2];
 			if (/^(cloudflare|node):/.test(spec)) continue;

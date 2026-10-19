@@ -307,6 +307,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
   void _close(int i) {
     final s = sessions.removeAt(i);
     s.kill();
+    // Closing a tab left of the open one shifts it down; keep the same tab open.
+    if (i < ShellSession.selected) ShellSession.selected--;
     if (ShellSession.selected >= sessions.length) ShellSession.selected = sessions.length - 1;
     if (ShellSession.selected < 0) ShellSession.selected = 0;
     ShellSession.changes.value++;

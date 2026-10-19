@@ -140,7 +140,11 @@ class Appearance extends ValueNotifier<ThemeMode> {
       language = saved['language'] as String? ?? 'en';
       appLock = saved['appLock'] == true;
       terminalFontSize = (saved['terminalFontSize'] as num?)?.toDouble() ?? terminalFontSize;
-      deployTargets = (saved['deployTargets'] as Map? ?? const {}).cast<String, String>();
+      // A modifiable copy: older ui.json files have no entry, and a const map can't be written to.
+      deployTargets = {
+        for (final e in (saved['deployTargets'] as Map? ?? {}).entries)
+          if (e.key is String && e.value is String) e.key as String: e.value as String,
+      };
     } catch (_) {}
   }
 
@@ -190,6 +194,7 @@ class Appearance extends ValueNotifier<ThemeMode> {
   Map<String, String> deployTargets = {};
 
   void setDeployTarget(String project, String target) {
+    deployTargets = Map.of(deployTargets);
     deployTargets
       ..remove(project)
       ..[project] = target;

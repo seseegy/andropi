@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'ci_panel.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Runs [task] in a bottom sheet that streams its output, then shows either
@@ -51,20 +52,54 @@ class _TaskSheetState<T> extends State<_TaskSheet<T>> {
         })
         .then(
           (r) {
-            if (!mounted) return;
+            if (!mounted) return _finishedHidden(r, null);
             setState(() {
               running = false;
               result = r;
             });
           },
           onError: (Object e) {
-            if (!mounted) return;
+            if (!mounted) return _finishedHidden(null, e);
             setState(() {
               running = false;
               error = e;
             });
           },
         );
+  }
+
+  /// Where to report a task that was hidden while it ran.
+  ScaffoldMessengerState? _messenger;
+
+  /// Closes the sheet; the task carries on and reports when it ends.
+  void _hide() {
+    _messenger = ScaffoldMessenger.maybeOf(context);
+    // Lift the back guard first (it vetoes pops too), then close.
+    setState(() => _hiding = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  bool _hiding = false;
+
+  void _finishedHidden(T? r, Object? e) {
+    final messenger = _messenger;
+    if (messenger == null) return;
+    final url = r is String && r.startsWith('http') ? r : null;
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          e != null
+              ? '${widget.title}: ${tr('failed')}. ${e.toString().split('\n').first}'
+              : '${widget.title}: ${tr('done')}${url != null ? ' · $url' : ''}',
+        ),
+        action: url != null && widget.openUrl != null
+            ? SnackBarAction(label: tr('Open'), onPressed: () => widget.openUrl!(url))
+            : null,
+      ),
+    );
   }
 
   void _log(String line) {
@@ -102,8 +137,8 @@ class _TaskSheetState<T> extends State<_TaskSheet<T>> {
 
     // Back can't close the sheet while the task runs: it would keep going out of sight, and its result be lost.
     return PopScope(
-      canPop: !running,
-      // A snackbar would be hidden behind this sheet; a tap of feedback says "not yet".
+      canPop: !running || _hiding,
+      // A snackbar would be hidden behind this sheet; a tap of feedback says "not yet" (Hide closes it).
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) HapticFeedback.selectionClick();
       },
@@ -119,6 +154,13 @@ class _TaskSheetState<T> extends State<_TaskSheet<T>> {
                   status,
                   const SizedBox(width: 10),
                   Expanded(child: Text(widget.title, style: text.titleMedium)),
+                  // Long tasks (waiting on CI, a slow server) shouldn't hold the app hostage.
+                  if (running)
+                    TextButton.icon(
+                      onPressed: _hide,
+                      icon: const Icon(LucideIcons.minimize2, size: 16),
+                      label: Text(tr('Hide')),
+                    ),
                 ],
               ),
               const SizedBox(height: 14),

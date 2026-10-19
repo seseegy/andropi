@@ -144,18 +144,32 @@ class _DeploySheetState extends State<_DeploySheet> {
   /// Cloudflare uploads files as they are, so point at the build output: an existing dist/build/out, or, for a
   /// project with a package.json and no wrangler config, dist after building it first.
   void _suggestCloudflareFolder() {
-    if (folder.text.trim().isNotEmpty) return;
+    if (folder.text.trim().isNotEmpty || !it.cloudflareConnected) return;
     final cwd = widget.agent.cwd;
     for (final d in ['dist', 'build', 'out']) {
       if (Directory('$cwd/$d').existsSync()) {
-        folder.text = d;
+        folder.text = _suggested = d;
         return;
       }
     }
+    // A folder that doesn't exist yet only makes sense when a build will create it.
     final wrangler = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'].any((f) => File('$cwd/$f').existsSync());
-    if (!wrangler && File('$cwd/package.json').existsSync()) {
-      folder.text = 'dist';
-      buildFirst = hasContainer;
+    if (!wrangler && hasContainer && File('$cwd/package.json').existsSync()) {
+      folder.text = _suggested = 'dist';
+      buildFirst = true;
+    }
+  }
+
+  /// The folder filled in for Cloudflare, cleared again when switching to another target.
+  String? _suggested;
+
+  void _selectTarget(DeployTarget t) {
+    target = t;
+    if (t == DeployTarget.cloudflare) {
+      _suggestCloudflareFolder();
+    } else if (_suggested != null && folder.text.trim() == _suggested) {
+      folder.clear();
+      _suggested = null;
     }
   }
 
@@ -196,8 +210,12 @@ class _DeploySheetState extends State<_DeploySheet> {
       DeployTarget.githubPages => {'repo': name.text.trim(), 'message': message.text.trim(), 'commit': commit},
       DeployTarget.ssh => {'hostId': hostId, 'remotePath': remotePath.text.trim()},
     };
-    Appearance.instance.setDeployTarget(widget.agent.cwd, _targetId);
-    Navigator.of(context).pop(_DeployRequest(_targetId, _label, dir, options));
+    final request = _DeployRequest(_targetId, _label, dir, options);
+    Navigator.of(context).pop(request);
+    // Remembering is a convenience; it must never get in the way of the deploy.
+    try {
+      Appearance.instance.setDeployTarget(widget.agent.cwd, request.target);
+    } catch (_) {}
   }
 
   @override
@@ -247,10 +265,7 @@ class _DeploySheetState extends State<_DeploySheet> {
                       label: Text(t.label),
                       showCheckmark: false,
                       selected: target == t,
-                      onSelected: (_) => setState(() {
-                        target = t;
-                        if (t == DeployTarget.cloudflare) _suggestCloudflareFolder();
-                      }),
+                      onSelected: (_) => setState(() => _selectTarget(t)),
                     ),
                 ],
               ),
@@ -274,6 +289,8 @@ class _DeploySheetState extends State<_DeploySheet> {
                       setState(() {
                         hostId ??= it.hosts.firstOrNull?.id;
                         if (remotePath.text.isEmpty) remotePath.text = it.hosts.firstOrNull?.path ?? '';
+                        // Just connected Cloudflare: suggest its folder as on open.
+                        if (target == DeployTarget.cloudflare) _suggestCloudflareFolder();
                       });
                     }
                   },

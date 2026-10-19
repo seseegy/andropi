@@ -29,6 +29,8 @@ class _NetworkScreenState extends State<NetworkScreen> {
   Future<void> _saveCustom() async {
     final url = customUrl.text.trim();
     if (!RegExp(r'^https://\S+$').hasMatch(url)) {
+      // Keep the field open so it can be corrected.
+      setState(() => pickingCustom = true);
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(tr('Enter an https:// DNS-over-HTTPS address'))));
       return;
@@ -102,7 +104,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                           color: const Color(0xFFF38020),
                           title: tr('Cloudflare'),
                           subtitle: '1.1.1.1 over HTTPS · recommended',
-                          selected: s.dns == 'cloudflare',
+                          selected: s.dns == 'cloudflare' && !pickingCustom,
                           onTap: () {
                             setState(() => pickingCustom = false);
                             _save({'dns': 'cloudflare'});
@@ -113,7 +115,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                           color: const Color(0xFF4285F4),
                           title: tr('Google'),
                           subtitle: '8.8.8.8 over HTTPS',
-                          selected: s.dns == 'google',
+                          selected: s.dns == 'google' && !pickingCustom,
                           onTap: () {
                             setState(() => pickingCustom = false);
                             _save({'dns': 'google'});
@@ -134,7 +136,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                           color: p.muted,
                           title: tr('System'),
                           subtitle: tr('Whatever the phone and network use'),
-                          selected: s.dns == 'system',
+                          selected: s.dns == 'system' && !pickingCustom,
                           onTap: () {
                             setState(() => pickingCustom = false);
                             _save({'dns': 'system'});

@@ -306,6 +306,8 @@ const _id = <String, String>{
       'Path yang tidak dikenal memuat index.html (router React, Vue, Svelte)',
   'Build first': 'Build dulu',
   'Close tab': 'Tutup tab',
+  'done': 'selesai',
+  'failed': 'gagal',
   'Folder to deploy': 'Folder yang di-deploy',
   '.  (or dist, build, public…)': '.  (atau dist, build, public…)',
   'Project name': 'Nama project',
