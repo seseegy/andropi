@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../agent/agent_controller.dart';
+import '../agent/drafts.dart';
 import '../agent/models.dart';
 import '../agent/features.dart';
 import 'i18n.dart';
@@ -56,6 +57,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final attachments = <Attachment>[];
   List<SlashCommand>? slash;
 
+  /// The chat whose draft the input holds.
+  String? draftChat;
+
   AgentController get agent => widget.agent;
 
   /// "/par" while typing a command name; null otherwise.
@@ -69,8 +73,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     agent.addListener(_onAgentChanged);
-    final prompt = widget.initialPrompt;
-    if (prompt != null) {
+    draftChat = agent.sessionId;
+    final prompt = widget.initialPrompt ?? Drafts.instance.get(draftChat);
+    if (prompt.isNotEmpty) {
       input.text = prompt;
       input.selection = TextSelection.collapsed(offset: prompt.length);
       WidgetsBinding.instance.addPostFrameCallback((_) => focus.requestFocus());
@@ -80,6 +85,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_atBottom != followBottom) setState(() => followBottom = _atBottom);
     });
     input.addListener(() {
+      Drafts.instance.set(draftChat, input.text);
       if (_slashQuery != null && slash == null) _loadSlash();
       setState(() {});
     });
@@ -93,6 +99,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     agent.removeListener(_onAgentChanged);
+    Drafts.instance.flush();
     scroll.dispose();
     input.dispose();
     focus.dispose();
@@ -115,6 +122,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onAgentChanged() {
+    // Another chat opened under this screen (new chat, fork, the open one deleted): bring its draft along.
+    if (agent.sessionId != draftChat) {
+      draftChat = agent.sessionId;
+      final draft = Drafts.instance.get(draftChat);
+      input.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+    }
     final grew = agent.entries.length != lastCount;
     lastCount = agent.entries.length;
     if (followBottom || grew && agent.entries.lastOrNull is UserEntry) _jumpToBottom();
