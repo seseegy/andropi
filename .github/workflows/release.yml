@@ -4,6 +4,7 @@
 # Versions never collide: the patch number and the build number both grow with the run number, and runs are
 # serialized. The base comes from pubspec.yaml (version: X.Y.Z+B), so bump X.Y there for a bigger release.
 #   release = X.Y.(Z + run_number), versionCode = B + run_number
+# Pull request builds use run numbers too, so release numbers can skip; they still only go up.
 #
 # Every APK is signed with the same release key from the repository secrets, so each update installs over the
 # previous one. Without the secrets the run fails instead of publishing an APK signed with another key.
@@ -22,12 +23,21 @@ on:
       - "store/**"
       - "fastlane/**"
       - "**.md"
+  # Pull requests get the same build, without publishing, so a broken build shows up before merging.
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "store/**"
+      - "fastlane/**"
+      - "**.md"
   workflow_dispatch:
 
 # One release at a time, in order; a newer push waits instead of cancelling a release halfway.
+# A pull request only replaces its own older build.
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -60,6 +70,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          # Pull requests from forks get no secrets; their build falls back to the debug key.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No signing secrets for this pull request; building with the debug key"
+            exit 0
+          fi
           for s in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
             if [ -z "${!s}" ]; then echo "::error::Repository secret $s is missing"; exit 1; fi
           done
@@ -126,7 +141,16 @@ jobs:
           (cd release && sha256sum *.apk > SHA256SUMS.txt)
           ls -lh release
 
+      - name: Upload build
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: andropi-pr-${{ github.event.number }}
+          path: release/
+          retention-days: 7
+
       - name: Publish release
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.name }}
