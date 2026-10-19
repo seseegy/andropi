@@ -208,7 +208,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                       integrations: it,
                       onLink: () => widget.agent.client.openUrl('https://app.s1.dev'),
                       checkCredits: true,
-                      footer: SettingsGroup(
+                      footer: _InsetGroup(
                         children: [
                           _FeatureSwitch(
                             icon: LucideIcons.search,
@@ -314,6 +314,29 @@ List<String> parseApiKeys(String text) {
   return keys;
 }
 
+/// A group of rows inside a card: a shade darker than the card, so it reads as one group.
+class _InsetGroup extends StatelessWidget {
+  const _InsetGroup({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(18)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 1, indent: 66, endIndent: 16, color: p.border),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _FeatureSwitch extends StatelessWidget {
   const _FeatureSwitch({
     required this.icon,
@@ -410,7 +433,13 @@ class _KeyListState extends State<_KeyList> {
     input.clear();
     credits = null;
     setState(() => adding = false);
-    _snack(added == 0 ? tr('These keys are already saved') : tr('{n} keys added').replaceAll('{n}', '$added'));
+    _snack(
+      added == 0
+          ? tr('These keys are already saved')
+          : added == 1
+          ? tr('1 key added')
+          : tr('{n} keys added').replaceAll('{n}', '$added'),
+    );
   });
 
   /// Removes after a confirmation: the key is only shown masked, so it can't be copied back afterwards.
@@ -494,7 +523,12 @@ class _KeyListState extends State<_KeyList> {
                         ? Text(
                             credits![i].credits != null
                                 ? tr('{n} credits').replaceAll('{n}', '${credits![i].credits}')
-                                : credits![i].error ?? '',
+                                : switch (credits![i].error) {
+                                    'invalid_key' => tr('Invalid key'),
+                                    'no_credits' => tr('Out of credits'),
+                                    'rate_limited' => tr('Rate limited, try again soon'),
+                                    final e => e ?? '',
+                                  },
                             textAlign: TextAlign.end,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

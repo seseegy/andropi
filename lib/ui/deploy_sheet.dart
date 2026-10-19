@@ -84,7 +84,24 @@ class _DeploySheet extends StatefulWidget {
 
 class _DeploySheetState extends State<_DeploySheet> {
   Integrations get it => widget.agent.integrations;
-  late DeployTarget target = it.vercelUser != null
+  late DeployTarget target = _lastTarget ?? _defaultTarget;
+
+  /// The target this project was last deployed to, while still connected.
+  DeployTarget? get _lastTarget {
+    final last = Appearance.instance.deployTargets[widget.agent.cwd];
+    if (last == null) return null;
+    if (last == 'cloudflare_pages') mode = CloudflareMode.pages;
+    final t = switch (last) {
+      'vercel' => DeployTarget.vercel,
+      'cloudflare_workers' || 'cloudflare_pages' => DeployTarget.cloudflare,
+      'github_pages' => DeployTarget.githubPages,
+      'ssh' => DeployTarget.ssh,
+      _ => null,
+    };
+    return t != null && _connected(t) ? t : null;
+  }
+
+  DeployTarget get _defaultTarget => it.vercelUser != null
       ? DeployTarget.vercel
       : it.cloudflareConnected
       ? DeployTarget.cloudflare
@@ -107,7 +124,9 @@ class _DeploySheetState extends State<_DeploySheet> {
 
   ProjectInfo? get project => it.projects.where((p) => p.path == widget.agent.cwd).firstOrNull;
 
-  bool get connected => switch (target) {
+  bool get connected => _connected(target);
+
+  bool _connected(DeployTarget target) => switch (target) {
     DeployTarget.vercel => it.vercelUser != null,
     DeployTarget.cloudflare => it.cloudflareConnected,
     DeployTarget.githubPages => it.github != null,
@@ -177,6 +196,7 @@ class _DeploySheetState extends State<_DeploySheet> {
       DeployTarget.githubPages => {'repo': name.text.trim(), 'message': message.text.trim(), 'commit': commit},
       DeployTarget.ssh => {'hostId': hostId, 'remotePath': remotePath.text.trim()},
     };
+    Appearance.instance.setDeployTarget(widget.agent.cwd, _targetId);
     Navigator.of(context).pop(_DeployRequest(_targetId, _label, dir, options));
   }
 
@@ -192,7 +212,11 @@ class _DeploySheetState extends State<_DeploySheet> {
         controller: c,
         autocorrect: false,
         style: const TextStyle(fontFamily: 'GeistMono', fontSize: 14),
-        decoration: InputDecoration(labelText: label, hintText: hint, helperText: helper),
+        decoration: InputDecoration(
+          labelText: tr(label),
+          hintText: hint == null ? null : tr(hint),
+          helperText: helper == null ? null : tr(helper),
+        ),
       ),
     );
 
@@ -232,12 +256,15 @@ class _DeploySheetState extends State<_DeploySheet> {
               ),
               const SizedBox(height: 16),
               if (!connected) ...[
-                Text(switch (target) {
-                  DeployTarget.vercel => 'Connect Vercel to deploy there.',
-                  DeployTarget.cloudflare => 'Connect Cloudflare to deploy to Workers or Pages.',
-                  DeployTarget.githubPages => 'Connect GitHub to publish with Pages.',
-                  DeployTarget.ssh => 'Add a server first.',
-                }, style: text.bodySmall),
+                Text(
+                  tr(switch (target) {
+                    DeployTarget.vercel => 'Connect Vercel to deploy there.',
+                    DeployTarget.cloudflare => 'Connect Cloudflare to deploy to Workers or Pages.',
+                    DeployTarget.githubPages => 'Connect GitHub to publish with Pages.',
+                    DeployTarget.ssh => 'Add a server first.',
+                  }),
+                  style: text.bodySmall,
+                ),
                 const SizedBox(height: 12),
                 OutlinedButton(
                   onPressed: () async {
@@ -272,6 +299,13 @@ class _DeploySheetState extends State<_DeploySheet> {
                     ),
                     style: text.bodySmall,
                   ),
+                  if (it.cloudflareAccounts.length > 1) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      tr('Account: {name}').replaceAll('{name}', it.cloudflareAccountName ?? ''),
+                      style: text.bodySmall?.copyWith(color: p.text),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                 ],
                 field(folder, 'Folder to deploy', hint: '.  (or dist, build, public…)'),

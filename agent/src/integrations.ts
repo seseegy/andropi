@@ -580,7 +580,12 @@ export class Integrations {
 
 	async deploy(target: string, dir: string, options: Record<string, any>, log: Log) {
 		// A Cloudflare deploy may build its output folder first.
-		if (!existsSync(dir) && !(target.startsWith("cloudflare") && options.build)) throw new Error(`No such folder: ${dir}`);
+		if (!existsSync(dir) && !(target.startsWith("cloudflare") && options.build)) {
+			// Name it the way the user typed it: relative to the project, not the app's private path.
+			const root = typeof options.root === "string" ? options.root : null;
+			const shown = root ? relative(root, dir) || "." : basename(dir);
+			throw new Error(`No such folder: ${shown}${target.startsWith("cloudflare") ? ". Build the project first, or turn on Build first." : ""}`);
+		}
 		switch (target) {
 			case "vercel":
 				return this.deployVercel(dir, options, log);

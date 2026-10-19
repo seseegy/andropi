@@ -140,6 +140,7 @@ class Appearance extends ValueNotifier<ThemeMode> {
       language = saved['language'] as String? ?? 'en';
       appLock = saved['appLock'] == true;
       terminalFontSize = (saved['terminalFontSize'] as num?)?.toDouble() ?? terminalFontSize;
+      deployTargets = (saved['deployTargets'] as Map? ?? const {}).cast<String, String>();
     } catch (_) {}
   }
 
@@ -185,6 +186,19 @@ class Appearance extends ValueNotifier<ThemeMode> {
     _save();
   }
 
+  /// The deploy target last used per project folder, so the deploy sheet opens on it.
+  Map<String, String> deployTargets = {};
+
+  void setDeployTarget(String project, String target) {
+    deployTargets
+      ..remove(project)
+      ..[project] = target;
+    while (deployTargets.length > 50) {
+      deployTargets.remove(deployTargets.keys.first);
+    }
+    _save();
+  }
+
   void finishOnboarding() {
     onboarded = true;
     _save();
@@ -203,6 +217,7 @@ class Appearance extends ValueNotifier<ThemeMode> {
           'language': language,
           'appLock': appLock,
           'terminalFontSize': terminalFontSize,
+          'deployTargets': deployTargets,
         }),
       );
     } catch (_) {}

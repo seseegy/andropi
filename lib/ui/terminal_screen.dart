@@ -603,23 +603,29 @@ class _TerminalScreenState extends State<TerminalScreen> {
   void _saveFont() => Appearance.instance.setTerminalFontSize(fontSize);
 
   Widget _selectionBar(Palette p, ShellSession s) {
-    Widget action(String label, IconData icon, VoidCallback onTap) => InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: p.inverse),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(color: p.inverse, fontSize: 13, fontWeight: FontWeight.w500),
+    // Semantics so screen readers announce these as buttons, not loose text.
+    Widget action(String label, IconData icon, VoidCallback onTap) => MergeSemantics(
+      child: Semantics(
+        button: true,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: p.inverse),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(color: p.inverse, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

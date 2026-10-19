@@ -48,6 +48,8 @@ export class Cloudflare {
 
 	static async request(token: string, path: string, init: RequestInit = {}, auth = `Bearer ${token}`) {
 		const res = await fetch(path.startsWith("http") ? path : `${API}${path}`, {
+			// Generous for big uploads on mobile data, but a stalled connection still ends.
+			signal: AbortSignal.timeout(180_000),
 			...init,
 			headers: {
 				Authorization: auth,
@@ -266,6 +268,25 @@ export class Cloudflare {
 		log(`Uploading ${total} new or changed file${total === 1 ? "" : "s"} (${files.length - total} unchanged)…`);
 		let jwt: string = session.jwt;
 		let done = 0;
+		// Some accounts are switched to one file per request (a claim in the upload token), as wrangler honours.
+		if (jwtClaim(session.jwt, "wrangler_single_asset_uploads") === true) {
+			for (const hash of buckets.flat()) {
+				const path = byHash.get(hash);
+				if (!path) throw new Error("Cloudflare asked for a file that isn't in the folder");
+				const result = await retry(() =>
+					Cloudflare.request(
+						this.token,
+						`/accounts/${this.accountId}/workers/assets/upload/${hash}`,
+						{ method: "POST", body: readFileSync(path), headers: { "Content-Type": contentType(path) ?? "application/null" } },
+						`Bearer ${session.jwt}`,
+					),
+				);
+				if (result?.jwt) jwt = result.jwt;
+				done++;
+				if (done % 10 === 0 || done === total) log(`  ${done}/${total}`);
+			}
+			return jwt;
+		}
 		for (const bucket of buckets) {
 			const form = new FormData();
 			for (const hash of bucket) {
@@ -573,14 +594,19 @@ export function assetsIgnore(dir: string): (rel: string) => boolean {
 	};
 }
 
+/** A claim from a JWT's payload, or undefined when it can't be read. */
+function jwtClaim(jwt: string, claim: string): unknown {
+	try {
+		return JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"))[claim];
+	} catch {
+		return undefined;
+	}
+}
+
 /** Whether a JWT's exp has passed (or will within a minute). Unreadable tokens count as fresh. */
 function jwtExpired(jwt: string) {
-	try {
-		const { exp } = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"));
-		return typeof exp === "number" && exp * 1000 < Date.now() + 60_000;
-	} catch {
-		return false;
-	}
+	const exp = jwtClaim(jwt, "exp");
+	return typeof exp === "number" && exp * 1000 < Date.now() + 60_000;
 }
 
 function readOptional(path: string) {
