@@ -30,7 +30,8 @@ execSync(`npm install --omit=dev --ignore-scripts --no-audit --no-fund @earendil
 
 // 2. Drop what cannot run on Android or is never read at runtime.
 // prebuilds: desktop-only .node clipboard helpers; pi-tui skips them when missing.
-const dropDirs = new Set(["@esbuild", "@types", "examples", "test", "tests", "__tests__", ".github", "prebuilds"]);
+// .bin: CLI shims the host never runs; pi's points into dist/bundle, which is dropped below.
+const dropDirs = new Set([".bin", "@esbuild", "@types", "examples", "test", "tests", "__tests__", ".github", "prebuilds"]);
 const dropFile = (name) =>
 	name.endsWith(".map") ||
 	// TypeScript sources and typings ship next to the compiled JS; node only loads the JS.
