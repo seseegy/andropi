@@ -24,9 +24,19 @@ Future<String?> showMessageMenu(
   required Widget bubble,
   required List<MessageAction> actions,
   bool alignRight = true,
-}) {
+}) async {
+  // Close the keyboard first and let the chat settle, so the bubble is measured where it will stay.
+  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+  if (view != null && view.viewInsets.bottom > 0) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    for (var i = 0; i < 20 && view.viewInsets.bottom > 0; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+    await WidgetsBinding.instance.endOfFrame;
+  }
+  if (!bubbleContext.mounted) return null;
   final box = bubbleContext.findRenderObject() as RenderBox?;
-  if (box == null || !box.hasSize) return Future.value();
+  if (box == null || !box.hasSize) return null;
   final rect = box.localToGlobal(Offset.zero) & box.size;
   HapticFeedback.mediumImpact();
   return Navigator.of(bubbleContext).push<String>(
@@ -67,19 +77,19 @@ class _MessageMenu extends StatelessWidget {
     final media = MediaQuery.of(context);
     final screen = media.size;
     final top = media.padding.top + 12;
-    final bottom = screen.height - media.padding.bottom - 12;
+    final bottom = screen.height - math.max(media.padding.bottom, media.viewInsets.bottom) - 12;
     final menuHeight = actions.length * _rowHeight + (actions.length - 1) * 0.5;
+    final menuWidth = math.min(_menuWidth, screen.width - 24);
 
-    // A long message is shown cut short, so the menu always fits on screen.
-    final bubbleHeight = math.min(rect.height, (bottom - top) - menuHeight - _gap);
+    // A long message is shown cut short, so the menu always fits on screen (on a very short screen, not at all).
+    final bubbleHeight = math.max(0.0, math.min(rect.height, (bottom - top) - menuHeight - _gap));
     var bubbleTop = rect.top;
     // Prefer the menu under the bubble; slide the bubble up when that would run off the bottom.
     if (bubbleTop + bubbleHeight + _gap + menuHeight > bottom) bubbleTop = bottom - menuHeight - _gap - bubbleHeight;
     bubbleTop = math.max(bubbleTop, top);
     final menuTop = bubbleTop + bubbleHeight + _gap;
-    final menuLeft = alignRight
-        ? (rect.right - _menuWidth).clamp(12.0, screen.width - _menuWidth - 12)
-        : rect.left.clamp(12.0, screen.width - _menuWidth - 12);
+    final maxLeft = math.max(12.0, screen.width - menuWidth - 12);
+    final menuLeft = (alignRight ? rect.right - menuWidth : rect.left).clamp(12.0, maxLeft);
 
     final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -138,7 +148,7 @@ class _MessageMenu extends StatelessWidget {
             Positioned(
               left: menuLeft,
               top: menuTop,
-              width: _menuWidth,
+              width: menuWidth,
               child: Opacity(
                 opacity: t.clamp(0.0, 1.0),
                 child: Transform.scale(

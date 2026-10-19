@@ -86,4 +86,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(await result(), 'copy');
   });
+
+  testWidgets('a narrow, short screen lays out without errors', (tester) async {
+    tester.view.physicalSize = const Size(200, 220);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final result = await harness(tester, 'Hi', top: 20);
+    await tester.pump();
+    await tester.longPress(find.byType(UserBubble).first);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(tester.getRect(find.text('Copy')).right, lessThanOrEqualTo(200));
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(await result(), isNull);
+  });
 }

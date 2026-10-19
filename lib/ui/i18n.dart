@@ -575,4 +575,5 @@ const _id = <String, String>{
   'Running': 'Menjalankan',
   'GitHub sync is failing': 'Sinkron GitHub gagal terus',
   'Select text': 'Pilih teks',
+  'Nothing selected any more': 'Pilihan sudah tidak ada',
 };

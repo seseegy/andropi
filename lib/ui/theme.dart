@@ -177,6 +177,12 @@ class Appearance extends ValueNotifier<ThemeMode> {
     notifyListeners();
   }
 
+  /// Saved without notifying: only the terminal reads it, so the rest of the app needn't rebuild.
+  void setTerminalFontSize(double size) {
+    terminalFontSize = size;
+    _save();
+  }
+
   void finishOnboarding() {
     onboarded = true;
     _save();

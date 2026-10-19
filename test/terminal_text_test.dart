@@ -26,6 +26,16 @@ void main() {
     expect(terminalSelectionText(terminal, controller), 'README.md');
   });
 
+  test('an indented first line keeps its indentation', () {
+    final terminal = Terminal(maxLines: 100)
+      ..resize(40, 10)
+      ..write('server:\r\n  port: 80\r\n  host: x\r\n');
+    final controller = TerminalController();
+    final b = terminal.buffer;
+    controller.setSelection(b.createAnchor(0, 1), b.createAnchor(40, 2));
+    expect(terminalSelectionText(terminal, controller), '  port: 80\n  host: x');
+  });
+
   test('font size steps by half points and stays within limits', () {
     expect(terminalFontFor(12.3), 12.5);
     expect(terminalFontFor(3), 8);
