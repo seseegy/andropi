@@ -36,6 +36,12 @@ enum CloudflareMode { workers, pages }
 Future<void> showDeploySheet(BuildContext context, AgentController agent) async {
   await agent.integrations.refresh();
   await agent.integrations.refreshProjects();
+  // Whether a build can run (Cloudflare's "Build first" needs the container).
+  try {
+    await agent.integrations.refreshContainer();
+  } catch (_) {
+    // Unknown: Build first stays off.
+  }
   if (!context.mounted) return;
   final request = await showModalBottomSheet<_DeployRequest>(
     context: context,
@@ -108,6 +114,8 @@ class _DeploySheetState extends State<_DeploySheet> {
     DeployTarget.ssh => it.hosts.isNotEmpty,
   };
 
+  bool get hasContainer => it.container?.installed ?? false;
+
   @override
   void initState() {
     super.initState();
@@ -128,7 +136,7 @@ class _DeploySheetState extends State<_DeploySheet> {
     final wrangler = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml'].any((f) => File('$cwd/$f').existsSync());
     if (!wrangler && File('$cwd/package.json').existsSync()) {
       folder.text = 'dist';
-      buildFirst = true;
+      buildFirst = hasContainer;
     }
   }
 
@@ -305,9 +313,13 @@ class _DeploySheetState extends State<_DeploySheet> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(tr('Build first')),
-                      subtitle: Text(tr('Runs npm run build in the Linux container')),
-                      value: buildFirst,
-                      onChanged: (v) => setState(() => buildFirst = v),
+                      subtitle: Text(
+                        hasContainer
+                            ? tr('Runs npm run build in the Linux container')
+                            : tr('Needs the Linux container (Settings > Linux container)'),
+                      ),
+                      value: buildFirst && hasContainer,
+                      onChanged: hasContainer ? (v) => setState(() => buildFirst = v) : null,
                     ),
                   ],
                   DeployTarget.githubPages => [

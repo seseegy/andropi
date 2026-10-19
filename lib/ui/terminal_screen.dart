@@ -381,18 +381,27 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final name = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final h in hosts)
-              ListTile(
-                leading: const Icon(LucideIcons.server),
-                title: Text(h.name),
-                subtitle: Text(h.address, style: const TextStyle(fontFamily: mono, fontSize: 12)),
-                onTap: () => Navigator.of(context).pop(h.name),
-              ),
-            const SizedBox(height: 8),
-          ],
+        // Scrolls once there are more servers than fit.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(bottom: 8),
+            children: [
+              for (final h in hosts)
+                ListTile(
+                  leading: const Icon(LucideIcons.server),
+                  title: Text(h.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    h.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: mono, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.of(context).pop(h.name),
+                ),
+            ],
+          ),
         ),
       ),
     );

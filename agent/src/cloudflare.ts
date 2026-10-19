@@ -58,7 +58,18 @@ export class Cloudflare {
 		const body = (await res.json().catch(() => null)) as any;
 		if (!res.ok || body?.success === false) {
 			const error = body?.errors?.[0];
-			const err = new Error(`Cloudflare: ${error?.message ?? res.statusText} (${error?.code ?? res.status})`);
+			const code = error?.code as number | undefined;
+			const raw = `${error?.message ?? res.statusText} (${code ?? res.status})`;
+			// The usual causes, in words: a Global API Key pasted instead of a token, or a token missing permissions.
+			// Upload tokens (auth not from this token) report their own expiry, handled by the caller.
+			const ownToken = auth === `Bearer ${token}`;
+			const message =
+				ownToken && (code === 6003 || code === 6111 || code === 9106 || code === 9109 || code === 1000 || res.status === 401)
+					? `Cloudflare didn't accept this token. Paste an API token (not the Global API Key) in Accounts. [${raw}]`
+					: ownToken && (code === 10000 || res.status === 403)
+						? `This Cloudflare token isn't allowed to do that. It needs Workers Scripts: Edit and Cloudflare Pages: Edit (the "Edit Cloudflare Workers" template). [${raw}]`
+						: `Cloudflare: ${raw}`;
+			const err = new Error(message);
 			(err as any).status = res.status;
 			(err as any).code = error?.code;
 			throw err;
@@ -101,30 +112,36 @@ export class Cloudflare {
 		const name = sanitizeName(options.name || config?.name || basename(root));
 		const report = progress(log, `Workers · ${name}`, `https://dash.cloudflare.com/${this.accountId}/workers/services/view/${name}`);
 
+		// Anything the direct upload can't do exactly as wrangler would goes to wrangler, rather than half-deploying.
+		const unsupported = config ? Object.keys(config).filter((k) => !DIRECT_KEYS.has(k)) : [];
+		let main: string | null = null;
 		if (config?.main) {
-			const main = inside(root, resolve(config.dir, config.main), "The Worker's main file");
+			main = inside(root, resolve(config.dir, config.main), "The Worker's main file");
 			if (!existsSync(main)) throw new Error(`The Worker's main file is missing: ${config.main}`);
-			const needsBuild = !plainModules(main) || !!config.build || !!config.durable_objects || !!config.migrations;
-			if (needsBuild) {
-				if (!container.available) {
-					throw new Error(
-						"This Worker needs wrangler to build it (TypeScript, npm packages or Durable Objects). " +
-							"Install the Linux container and Node.js in it (Settings > Linux container), then deploy again.",
-					);
-				}
-				report("in_progress");
-				try {
-					const out = await container.run(
-						"box",
-						["-c", `npx --yes wrangler@4 deploy --name ${name}`],
-						{ cwd: config.dir, log },
-					);
-					report("success");
-					return { url: out.match(/https:\/\/\S+\.workers\.dev\S*/)?.[0] ?? null };
-				} catch (e) {
-					report("failure");
-					throw e;
-				}
+		}
+		const needsBuild = (main !== null && !plainModules(main)) || unsupported.length > 0;
+		if (config && needsBuild) {
+			if (!container.available) {
+				const why = unsupported.length
+					? `its config uses ${unsupported.join(", ")}`
+					: "it needs building (TypeScript, JSX or npm packages)";
+				throw new Error(
+					`This Worker has to be deployed with wrangler: ${why}. ` +
+						"Install the Linux container and Node.js in it (Settings > Linux container), then deploy again.",
+				);
+			}
+			report("in_progress");
+			try {
+				const out = await container.run(
+					"box",
+					["-c", `npx --yes wrangler@4 deploy --name ${name}`],
+					{ cwd: config.dir, log },
+				);
+				report("success");
+				return { url: out.match(/https:\/\/\S+\.workers\.dev\S*/)?.[0] ?? null };
+			} catch (e) {
+				report("failure");
+				throw e;
 			}
 		}
 
@@ -185,18 +202,26 @@ export class Cloudflare {
 				body: form,
 			});
 
-			// Serve it on workers.dev, as wrangler does by default.
+			// Serve it on workers.dev, as wrangler does by default. Like wrangler, look up the account's subdomain
+			// first: a new account may not have one yet (10007), and the Worker is deployed either way.
 			let url: string | null = null;
 			if (config?.workers_dev !== false) {
-				await this.api(`/accounts/${this.accountId}/workers/scripts/${name}/subdomain`, {
-					method: "POST",
-					body: JSON.stringify({ enabled: true, previews_enabled: true }),
-				});
+				let subdomain: string | null = null;
 				try {
-					const { subdomain } = await this.api(`/accounts/${this.accountId}/workers/subdomain`);
-					if (subdomain) url = `https://${name}.${subdomain}.workers.dev`;
-				} catch {
-					log("Deployed. This account has no workers.dev subdomain yet: pick one in the Cloudflare dashboard (Workers & Pages) to get a URL.");
+					subdomain = (await this.api(`/accounts/${this.accountId}/workers/subdomain`))?.subdomain ?? null;
+				} catch (e) {
+					if ((e as any).code !== 10007) throw e;
+				}
+				if (subdomain) {
+					await this.api(`/accounts/${this.accountId}/workers/scripts/${name}/subdomain`, {
+						method: "POST",
+						body: JSON.stringify({ enabled: true, previews_enabled: config?.preview_urls ?? true }),
+					});
+					url = `https://${name}.${subdomain}.workers.dev`;
+				} else {
+					log(
+						"Deployed. This account has no workers.dev subdomain yet: pick one in the Cloudflare dashboard (Workers & Pages), then deploy again to get a URL.",
+					);
 				}
 			}
 			report("success");
@@ -293,15 +318,25 @@ export class Cloudflare {
 			}
 			const branch = options.preview ? "preview" : project.production_branch || "main";
 
-			// Functions need wrangler to compile them.
-			if (existsSync(join(root, "functions"))) {
+			// Functions, a _worker.js folder, or a _worker.js that imports packages need wrangler to bundle them.
+			const worker = join(dir, "_worker.js");
+			const workerIsDir = existsSync(worker) && statSync(worker).isDirectory();
+			const workerModules = existsSync(worker) && !workerIsDir ? plainModules(worker) : [];
+			const functions = existsSync(join(root, "functions"));
+			if (functions || workerIsDir || workerModules === null) {
+				if (!container.available && (workerIsDir || workerModules === null)) {
+					throw new Error(
+						"This site's _worker.js has to be bundled by wrangler (it is a folder or imports packages). " +
+							"Install the Linux container and Node.js in it (Settings > Linux container), then deploy again.",
+					);
+				}
 				if (container.available) {
 					report("in_progress");
 					const out = await container.run(
 						"box",
 						[
 							"-c",
-							`npx --yes wrangler@4 pages deploy ${shellQuote(relative(root, dir) || ".")} --project-name ${name} --branch ${branch} --commit-dirty=true`,
+							`npx --yes wrangler@4 pages deploy ${shellQuote(relative(root, dir) || ".")} --project-name ${name} --branch ${shellQuote(branch)} --commit-dirty=true`,
 						],
 						{ cwd: root, log },
 					);
@@ -316,16 +351,29 @@ export class Cloudflare {
 			notSourceFolder(dir, root);
 			const files = listFiles(dir, (rel) => PAGES_SPECIAL.has(rel.split("/")[0]));
 			if (files.length === 0) throw new Error("Nothing to deploy: the folder is empty");
-			const { jwt } = await this.api(`/accounts/${this.accountId}/pages/projects/${name}/upload-token`);
+			// The upload token is short-lived: fetch a fresh one when it has expired or is refused, as wrangler does.
+			let jwt: string = (await this.api(`/accounts/${this.accountId}/pages/projects/${name}/upload-token`)).jwt;
+			const freshJwt = async () => {
+				jwt = (await this.api(`/accounts/${this.accountId}/pages/projects/${name}/upload-token`)).jwt;
+			};
 			log(`Hashing ${files.length} files…`);
 			const entries = files.map((rel) => {
 				const path = join(dir, rel);
 				return { rel, path, hash: hashFile(path), size: statSync(path).size };
 			});
 			const pages = (path: string, body: unknown) =>
-				retry(() =>
-					Cloudflare.request(this.token, `/pages/assets/${path}`, { method: "POST", body: JSON.stringify(body) }, `Bearer ${jwt}`),
-				);
+				retry(async () => {
+					if (jwtExpired(jwt)) await freshJwt();
+					const call = () =>
+						Cloudflare.request(this.token, `/pages/assets/${path}`, { method: "POST", body: JSON.stringify(body) }, `Bearer ${jwt}`);
+					try {
+						return await call();
+					} catch (e) {
+						if ((e as any).code !== 8000013 && (e as any).status !== 401) throw e;
+						await freshJwt();
+						return await call();
+					}
+				});
 			const missing = new Set<string>(await pages("check-missing", { hashes: entries.map((e) => e.hash) }));
 			const upload = entries.filter((e) => missing.has(e.hash));
 			if (upload.length) {
@@ -357,12 +405,14 @@ export class Cloudflare {
 				const text = readOptional(join(dir, special));
 				if (text) form.append(special, new File([text], special));
 			}
-			const worker = join(dir, "_worker.js");
-			if (existsSync(worker) && statSync(worker).isFile()) {
+			if (workerModules?.length) {
 				log("Uploading _worker.js…");
 				const bundle = new FormData();
 				bundle.set("metadata", JSON.stringify({ main_module: "_worker.js" }));
-				bundle.set("_worker.js", new File([readFileSync(worker)], "_worker.js", { type: "application/javascript+module" }));
+				for (const file of workerModules) {
+					const part = relative(dir, file).split(sep).join("/");
+					bundle.set(part, new File([readFileSync(file)], part, { type: "application/javascript+module" }));
+				}
 				form.append("_worker.bundle", new File([await new Response(bundle).blob()], "_worker.bundle"));
 				const routes = readOptional(join(dir, "_routes.json"));
 				if (routes) form.append("_routes.json", new File([routes], "_routes.json"));
@@ -373,15 +423,26 @@ export class Cloudflare {
 				body: form,
 			});
 			const started = Date.now();
-			while (Date.now() - started < 5 * 60_000) {
+			const dashboard = `https://dash.cloudflare.com/${this.accountId}/pages/view/${name}/${deployment.id}`;
+			for (;;) {
 				const stage = deployment.latest_stage;
-				if (stage?.status === "failure") throw new Error(`Pages deployment failed at ${stage.name}`);
+				if (stage?.status === "failure" || stage?.status === "canceled") {
+					throw new Error(`The Pages deployment ${stage.status === "failure" ? "failed" : "was canceled"} at ${stage.name}. Details: ${dashboard}`);
+				}
 				if (stage?.name === "deploy" && stage.status === "success") break;
+				if (Date.now() - started > 5 * 60_000) {
+					throw new Error(`The Pages deployment is still running after 5 minutes. Check it here: ${dashboard}`);
+				}
 				await sleep(2000);
-				deployment = await this.api(`/accounts/${this.accountId}/pages/projects/${name}/deployments/${deployment.id}`);
+				try {
+					deployment = await this.api(`/accounts/${this.accountId}/pages/projects/${name}/deployments/${deployment.id}`);
+				} catch {
+					// A blip while polling; the deployment itself carries on.
+				}
 			}
 			report("success");
-			const url = options.preview ? (deployment.aliases?.[0] ?? deployment.url) : `https://${project.subdomain}`;
+			const alias = (deployment.aliases as string[] | undefined)?.find((a) => a.endsWith(".pages.dev"));
+			const url = options.preview ? (alias ?? deployment.url) : `https://${project.subdomain}`;
 			log(`Live at ${url}`);
 			return { url };
 		} catch (e) {
@@ -512,6 +573,16 @@ export function assetsIgnore(dir: string): (rel: string) => boolean {
 	};
 }
 
+/** Whether a JWT's exp has passed (or will within a minute). Unreadable tokens count as fresh. */
+function jwtExpired(jwt: string) {
+	try {
+		const { exp } = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"));
+		return typeof exp === "number" && exp * 1000 < Date.now() + 60_000;
+	} catch {
+		return false;
+	}
+}
+
 function readOptional(path: string) {
 	try {
 		return statSync(path).isFile() ? readFileSync(path, "utf8") : null;
@@ -558,6 +629,30 @@ function progress(log: Log, name: string, url: string) {
 // ---------------------------------------------------------------------------
 // wrangler config
 
+/** Config keys the direct upload handles exactly like wrangler; any other key sends the deploy to wrangler. */
+const DIRECT_KEYS = new Set([
+	"dir",
+	"$schema",
+	"name",
+	"main",
+	"account_id",
+	"compatibility_date",
+	"compatibility_flags",
+	"workers_dev",
+	"preview_urls",
+	"assets",
+	"vars",
+	"kv_namespaces",
+	"d1_databases",
+	"r2_buckets",
+	"ai",
+	// Local development and environments other than the top level don't affect this deploy.
+	"dev",
+	"env",
+	"send_metrics",
+	"keep_vars",
+]);
+
 export interface WranglerConfig {
 	/** The folder the config file is in; its paths are relative to it. */
 	dir: string;
@@ -566,6 +661,7 @@ export interface WranglerConfig {
 	compatibility_date?: string;
 	compatibility_flags?: string[];
 	workers_dev?: boolean;
+	preview_urls?: boolean;
 	assets?: {
 		directory?: string;
 		binding?: string;
@@ -649,6 +745,8 @@ export function plainModules(main: string): string[] | null {
 		if (!/\.(m?js)$/.test(file) || !existsSync(file)) return false;
 		seen.add(file);
 		const source = readFileSync(file, "utf8");
+		// CommonJS and computed imports can't be followed: leave those to a bundler.
+		if (/\brequire\s*\(|\bimport\s*\(\s*[^"'\s]/.test(source)) return false;
 		for (const m of source.matchAll(IMPORT)) {
 			const spec = m[1] ?? m[2];
 			if (/^(cloudflare|node):/.test(spec)) continue;

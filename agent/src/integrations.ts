@@ -562,7 +562,17 @@ export class Integrations {
 		if (!existsSync(join(root, "package.json"))) throw new Error("No package.json to build");
 		log("Building (npm run build)…");
 		const install = existsSync(join(root, "node_modules")) ? "" : "npm install && ";
-		await container.run("box", ["-c", `${install}npm run build`], { cwd: root, log });
+		try {
+			await container.run("box", ["-c", `${install}npm run build`], { cwd: root, log });
+		} catch (e) {
+			const message = (e as Error).message;
+			if (message.startsWith("Node.js isn't installed")) throw e;
+			// The log above has npm's own output; say what failed in words.
+			if (/Missing script: "?build/.test(message)) {
+				throw new Error("package.json has no build script. Choose a folder that is already built, or add a build script.");
+			}
+			throw new Error(`The build failed (npm ${install ? "install or " : ""}run build); see the log above.\n${message}`);
+		}
 	}
 
 	// -------------------------------------------------------------------------

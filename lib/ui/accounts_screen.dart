@@ -31,6 +31,22 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
   void _snack(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 
+  /// Disconnects after a confirmation: a token can't be read back, so reconnecting means pasting it again.
+  Future<void> _disconnect(String service, Future<void> Function() action) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Disconnect {service}?').replaceAll('{service}', service)),
+        content: Text(tr('Its token is removed from this device. To reconnect you will need to paste a token again.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Disconnect'))),
+        ],
+      ),
+    );
+    if (ok == true) await _guard(action, success: tr('{service} disconnected').replaceAll('{service}', service));
+  }
+
   Future<void> _guard(Future<void> Function() action, {String? success}) async {
     try {
       await action();
@@ -83,7 +99,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           icon: SimpleIcons.github,
                           title: it.github!.name ?? it.github!.login,
                           subtitle: '@${it.github!.login} · git push and Pages enabled',
-                          onDisconnect: () => _guard(it.githubLogout),
+                          onDisconnect: () => _disconnect('GitHub', it.githubLogout),
                         ),
                   _Header(tr('Vercel')),
                   it.vercelUser == null
@@ -100,7 +116,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           icon: SimpleIcons.vercel,
                           title: it.vercelUser!,
                           subtitle: tr('Deploys enabled'),
-                          onDisconnect: () => _guard(it.vercelLogout),
+                          onDisconnect: () => _disconnect('Vercel', it.vercelLogout),
                         ),
                   _Header(tr('Cloudflare')),
                   if (!it.cloudflareConnected)
@@ -120,7 +136,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       icon: SimpleIcons.cloudflare,
                       title: it.cloudflareAccountName ?? 'Cloudflare',
                       subtitle: tr('Workers and Pages deploys enabled'),
-                      onDisconnect: () => _guard(it.cloudflareLogout),
+                      onDisconnect: () => _disconnect('Cloudflare', it.cloudflareLogout),
                     ),
                     if (it.cloudflareAccounts.length > 1)
                       Padding(
@@ -137,7 +153,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
                               ),
                           ],
                           onChanged: (id) {
-                            if (id != null) _guard(() => it.cloudflareSelectAccount(id));
+                            if (id == null) return;
+                            _guard(() => it.cloudflareSelectAccount(id), success: tr('Deploys now go to this account'));
                           },
                         ),
                       ),
