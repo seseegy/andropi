@@ -121,7 +121,32 @@ class AgentController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteSession(String path) => client.call('delete_session', {'path': path});
+  /// Deletes chats. If the open chat is among them, a fresh chat in the same folder takes its place.
+  Future<int> deleteSessions(List<String> paths) async {
+    final r = await client.call<Map<String, dynamic>>('delete_sessions', {'paths': paths});
+    await _afterSwitch(r);
+    return r['deleted'] as int? ?? 0;
+  }
+
+  /// What deleting a project would lose (uncommitted work, unpushed commits, chats) and what blocks it.
+  Future<ProjectDeleteCheck> projectDeleteCheck(String path) async =>
+      ProjectDeleteCheck(await client.call<Map<String, dynamic>>('project_delete_check', {'path': path}));
+
+  /// Deletes a workspace project folder, and its chats when [deleteChats]. Returns how many chats went.
+  Future<int> deleteProject(String path, {required bool deleteChats}) async {
+    final r = await client.call<Map<String, dynamic>>('delete_project', {'path': path, 'deleteChats': deleteChats});
+    await _afterSwitch(r);
+    await integrations.refreshProjects();
+    return r['deletedChats'] as int? ?? 0;
+  }
+
+  /// Applies host state after a delete; the transcript reloads when the open chat was replaced.
+  Future<void> _afterSwitch(Map<String, dynamic> state) async {
+    final before = sessionId;
+    _applyState(state);
+    if (sessionId != before) await loadHistory();
+    notifyListeners();
+  }
 
   Future<List<SessionSummary>> listSessions() async {
     final list = await client.call<List>('sessions');

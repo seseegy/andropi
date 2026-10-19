@@ -12,8 +12,8 @@
  * stdout is reserved for protocol records; logs go to stderr.
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	type AgentSession,
@@ -31,7 +31,7 @@ import { Container, type Distro } from "./container.js";
 import { installDohLookup } from "./dns.js";
 import * as gitops from "./gitops.js";
 import { Guard } from "./guard.js";
-import { Integrations, type Log } from "./integrations.js";
+import { Integrations, type Log, run } from "./integrations.js";
 import { installLenientTools } from "./lenient.js";
 import { Mcp } from "./mcp.js";
 import { CustomProviders, fetchModels } from "./providers.js";
@@ -349,6 +349,90 @@ async function providers() {
 }
 
 // ---------------------------------------------------------------------------
+// Deleting chats and projects
+
+const sessionsDir = () => resolve(agentDir, "sessions");
+const within = (path: string, dir: string) => path === dir || path.startsWith(dir + sep);
+
+/** Deletes chat files. The open chat is swapped for a fresh one first, in [cwd] or its own folder. */
+async function deleteSessions(paths: string[], cwd?: string) {
+	const s = session!;
+	const files = paths.map((p) => resolve(p)).filter((p) => within(p, sessionsDir()) && p.endsWith(".jsonl"));
+	const current = s.sessionFile ? resolve(s.sessionFile) : undefined;
+	if (current && files.includes(current)) {
+		if (s.isStreaming) throw new Error("Stop the agent before deleting the open chat");
+		await openSession(SessionManager.create(cwd ?? s.sessionManager.getCwd()));
+	}
+	let deleted = 0;
+	for (const f of files) {
+		try {
+			unlinkSync(f);
+			deleted++;
+		} catch {
+			// Already gone.
+		}
+	}
+	return { deleted, ...state() };
+}
+
+/** A project is a folder directly inside the workspace; nothing else may be deleted. */
+function projectDir(path: string) {
+	const dir = resolve(path);
+	if (dirname(dir) !== resolve(workspace)) throw new Error("Only projects inside the workspace can be deleted");
+	if (!existsSync(dir)) throw new Error("The project folder no longer exists");
+	return dir;
+}
+
+/** What deleting a project would lose, and what stops it right now. */
+async function projectDeleteCheck(path: string) {
+	const dir = projectDir(path);
+	const chats = (await SessionManager.listAll()).filter((i) => i.cwd && within(resolve(i.cwd), dir));
+	const git = existsSync(join(dir, ".git"));
+	const lines = async (args: string[]) =>
+		(await run("git", args, { cwd: dir }).catch(() => "")).split("\n").filter((l) => l.trim()).length;
+	const blockers: string[] = [];
+	const s = session!;
+	if (s.isStreaming && within(resolve(s.sessionManager.getCwd()), dir)) blockers.push("The agent is working in this project");
+	const { runs, schedules } = runner.summary();
+	const busyRuns = runs.filter((r) => (r.status === "queued" || r.status === "running") && r.cwd && within(resolve(r.cwd), dir));
+	if (busyRuns.length) blockers.push(`${busyRuns.length} background task(s) use this project`);
+	const busySchedules = schedules.filter((x) => x.enabled && x.cwd && within(resolve(x.cwd), dir));
+	if (busySchedules.length) blockers.push(`${busySchedules.length} schedule(s) use this project`);
+	return {
+		path: dir,
+		chats: chats.length,
+		git,
+		// Uncommitted files, and commits on local branches that no remote has.
+		changes: git ? await lines(["status", "--porcelain"]) : 0,
+		unpushed: git ? await lines(["log", "--branches", "--not", "--remotes", "--format=%h"]) : 0,
+		blockers,
+	};
+}
+
+async function deleteProject(path: string, deleteChats: boolean) {
+	const check = await projectDeleteCheck(path);
+	if (check.blockers.length) throw new Error(check.blockers.join("; "));
+	const dir = check.path;
+	const s = session!;
+	// Leave the project first so nothing keeps working in a folder that is about to vanish.
+	if (within(resolve(s.sessionManager.getCwd()), dir)) await openSession(SessionManager.create(workspace));
+	let deletedChats = 0;
+	if (deleteChats) {
+		const files = (await SessionManager.listAll()).filter((i) => i.cwd && within(resolve(i.cwd), dir)).map((i) => i.path);
+		deletedChats = (await deleteSessions(files, workspace)).deleted;
+	}
+	try {
+		rmSync(dir, { recursive: true, force: true });
+	} catch {
+		// Tools in the container leave read-only folders (Go and npm caches); make them writable and retry.
+		await run("chmod", ["-R", "u+rwX", dir], { cwd: workspace }).catch(() => "");
+		rmSync(dir, { recursive: true, force: true });
+	}
+	checkpoints.forget(dir);
+	return { deletedChats, ...state() };
+}
+
+// ---------------------------------------------------------------------------
 // Backups
 
 function backupTarget() {
@@ -537,9 +621,13 @@ async function handle(cmd: Command): Promise<unknown> {
 			return null;
 		}
 		case "delete_session":
-			if (cmd.path === s.sessionFile) throw new Error("Switch to another session before deleting this one");
-			unlinkSync(cmd.path);
-			return null;
+			return deleteSessions([cmd.path]);
+		case "delete_sessions":
+			return deleteSessions(cmd.paths ?? []);
+		case "project_delete_check":
+			return projectDeleteCheck(cmd.path);
+		case "delete_project":
+			return deleteProject(cmd.path, !!cmd.deleteChats);
 		case "messages":
 			return s.messages;
 

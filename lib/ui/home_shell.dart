@@ -14,6 +14,7 @@ import 'i18n.dart';
 import 'accounts_screen.dart';
 import 'chat_extras.dart';
 import 'chat_screen.dart';
+import 'delete_flows.dart';
 import 'folder_picker.dart';
 import 'kit.dart';
 import 'illustration.dart';
@@ -844,11 +845,20 @@ class _QuickCard extends StatelessWidget {
 }
 
 class _SessionRow extends StatelessWidget {
-  const _SessionRow({required this.session, required this.workspace, required this.onTap, this.onLongPress});
+  const _SessionRow({
+    required this.session,
+    required this.workspace,
+    required this.onTap,
+    this.onLongPress,
+    this.selected,
+  });
   final SessionSummary session;
   final String workspace;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+
+  /// Non-null in selection mode: whether this chat is picked.
+  final bool? selected;
 
   @override
   Widget build(BuildContext context) {
@@ -894,7 +904,14 @@ class _SessionRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(_ago(session.modified), style: TextStyle(fontSize: 11.5, color: p.faint)),
+            if (selected != null)
+              Icon(
+                selected! ? LucideIcons.circleCheck : LucideIcons.circle,
+                size: 22,
+                color: selected! ? p.danger : p.faint,
+              )
+            else
+              Text(_ago(session.modified), style: TextStyle(fontSize: 11.5, color: p.faint)),
           ],
         ),
       ),
@@ -927,6 +944,9 @@ class _ChatsTabState extends State<_ChatsTab> {
   late Future<List<SessionSummary>> sessions = widget.agent.listSessions();
   String query = '';
 
+  /// Paths of chats picked for deleting; selection mode is on while it is not empty.
+  final _selected = <String>{};
+
   AgentController get agent => widget.agent;
 
   void _reload() => setState(() {
@@ -934,7 +954,6 @@ class _ChatsTabState extends State<_ChatsTab> {
   });
 
   Future<void> _menu(SessionSummary s) async {
-    final active = s.id == agent.sessionId;
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -949,12 +968,18 @@ class _ChatsTabState extends State<_ChatsTab> {
                 onTap: () => Navigator.pop(context, 'rename'),
               ),
               SettingsRow(
+                icon: LucideIcons.squareCheck,
+                color: context.palette.muted,
+                title: tr('Select'),
+                subtitle: tr('Pick several chats to delete at once'),
+                onTap: () => Navigator.pop(context, 'select'),
+              ),
+              SettingsRow(
                 icon: LucideIcons.trash2,
                 color: context.palette.danger,
                 title: tr('Delete'),
-                subtitle: active ? 'Open another chat first' : null,
                 destructive: true,
-                onTap: active ? null : () => Navigator.pop(context, 'delete'),
+                onTap: () => Navigator.pop(context, 'delete'),
               ),
             ],
           ),
@@ -977,10 +1002,48 @@ class _ChatsTabState extends State<_ChatsTab> {
       );
       controller.dispose();
       if (name != null && name.trim().isNotEmpty) await agent.renameSession(s.path, name.trim());
+    } else if (action == 'select') {
+      setState(() => _selected.add(s.path));
+      return;
     } else if (action == 'delete') {
-      await agent.deleteSession(s.path);
+      if (!await deleteChats(context, agent, [s])) return;
     }
     _reload();
+  }
+
+  void _toggle(SessionSummary s) =>
+      setState(() => _selected.contains(s.path) ? _selected.remove(s.path) : _selected.add(s.path));
+
+  Future<void> _deleteSelected(List<SessionSummary> visible) async {
+    final chosen = visible.where((s) => _selected.contains(s.path)).toList();
+    if (!await deleteChats(context, agent, chosen)) return;
+    setState(_selected.clear);
+    _reload();
+  }
+
+  Widget _selectionBar(List<SessionSummary> visible) {
+    final p = context.palette;
+    final count = visible.where((s) => _selected.contains(s.path)).length;
+    final allChosen = count == visible.length;
+    return Row(
+      children: [
+        IconButton(
+          tooltip: tr('Cancel'),
+          onPressed: () => setState(_selected.clear),
+          icon: const Icon(LucideIcons.x, size: 20),
+        ),
+        Expanded(child: Text('$count ${tr('selected')}', style: Theme.of(context).textTheme.titleMedium)),
+        TextButton(
+          onPressed: () => setState(() => allChosen ? _selected.clear() : _selected.addAll(visible.map((s) => s.path))),
+          child: Text(allChosen ? tr('Select none') : tr('Select all')),
+        ),
+        IconButton(
+          tooltip: tr('Delete'),
+          onPressed: count == 0 ? null : () => _deleteSelected(visible),
+          icon: Icon(LucideIcons.trash2, size: 20, color: count == 0 ? p.faint : p.danger),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1001,56 +1064,69 @@ class _ChatsTabState extends State<_ChatsTab> {
           for (final s in all) {
             groups.putIfAbsent(_bucket(s.modified), () => []).add(s);
           }
-          return RefreshIndicator(
-            onRefresh: () async => _reload(),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 130),
-              children: [
-                Text(tr('Chats'), style: text.displaySmall),
-                const SizedBox(height: 16),
-                TextField(
-                  onChanged: (v) => setState(() {
-                    query = v;
-                  }),
-                  decoration: InputDecoration(
-                    hintText: tr('Search anything'),
-                    prefixIcon: const Icon(LucideIcons.search, size: 18),
-                  ),
-                ),
-                if (!snap.hasData)
-                  const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  )
-                else if (all.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 40),
-                    child: Column(
-                      children: [
-                        if (q.isEmpty) const Illustration('chat', height: 200),
-                        const SizedBox(height: 12),
-                        Text(
-                          q.isEmpty ? 'No chats yet. Tap + to start one.' : 'Nothing matches.',
-                          style: text.bodySmall,
-                        ),
-                      ],
+          final selecting = _selected.isNotEmpty;
+          return PopScope(
+            // Back leaves selection mode first.
+            canPop: !selecting,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) setState(_selected.clear);
+            },
+            child: RefreshIndicator(
+              onRefresh: () async => _reload(),
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 130),
+                children: [
+                  if (selecting)
+                    SizedBox(height: text.displaySmall!.fontSize! * 1.25, child: _selectionBar(all))
+                  else
+                    Text(tr('Chats'), style: text.displaySmall),
+                  const SizedBox(height: 16),
+                  TextField(
+                    onChanged: (v) => setState(() {
+                      query = v;
+                    }),
+                    decoration: InputDecoration(
+                      hintText: tr('Search anything'),
+                      prefixIcon: const Icon(LucideIcons.search, size: 18),
                     ),
                   ),
-                for (final e in groups.entries) ...[
-                  SectionLabel(e.key, padding: const EdgeInsets.fromLTRB(2, 22, 2, 4)),
-                  for (final s in e.value)
-                    _SessionRow(
-                      session: s,
-                      workspace: ws,
-                      onLongPress: () => _menu(s),
-                      onTap: () async {
-                        if (s.id != agent.sessionId) await agent.openSession(s.path);
-                        if (context.mounted) await openChat(context, agent);
-                        _reload();
-                      },
+                  if (!snap.hasData)
+                    const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else if (all.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Column(
+                        children: [
+                          if (q.isEmpty) const Illustration('chat', height: 200),
+                          const SizedBox(height: 12),
+                          Text(
+                            q.isEmpty ? 'No chats yet. Tap + to start one.' : 'Nothing matches.',
+                            style: text.bodySmall,
+                          ),
+                        ],
+                      ),
                     ),
+                  for (final e in groups.entries) ...[
+                    SectionLabel(e.key, padding: const EdgeInsets.fromLTRB(2, 22, 2, 4)),
+                    for (final s in e.value)
+                      _SessionRow(
+                        session: s,
+                        workspace: ws,
+                        selected: selecting ? _selected.contains(s.path) : null,
+                        onLongPress: () => selecting ? _toggle(s) : _menu(s),
+                        onTap: () async {
+                          if (selecting) return _toggle(s);
+                          if (s.id != agent.sessionId) await agent.openSession(s.path);
+                          if (context.mounted) await openChat(context, agent);
+                          _reload();
+                        },
+                      ),
+                  ],
                 ],
-              ],
+              ),
             ),
           );
         },
@@ -1101,6 +1177,48 @@ class _ProjectsTabState extends State<_ProjectsTab> {
       await agent.newSession(dir: project.path);
     }
     if (mounted) await openChat(context, agent);
+  }
+
+  Future<void> _projectMenu(ProjectInfo project) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                child: Text(project.name, style: Theme.of(context).textTheme.titleMedium),
+              ),
+              SettingsGroup(
+                children: [
+                  SettingsRow(
+                    icon: LucideIcons.messageSquare,
+                    color: const Color(0xFF3E63DD),
+                    title: tr('Open'),
+                    onTap: () => Navigator.pop(context, 'open'),
+                  ),
+                  SettingsRow(
+                    icon: LucideIcons.trash2,
+                    color: context.palette.danger,
+                    title: tr('Delete project'),
+                    subtitle: tr('Removes the folder from this phone'),
+                    destructive: true,
+                    onTap: () => Navigator.pop(context, 'delete'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'open') await _open(project);
+    if (action == 'delete' && mounted) await deleteProjectFlow(context, agent, project);
   }
 
   @override
@@ -1161,6 +1279,14 @@ class _ProjectsTabState extends State<_ProjectsTab> {
                           ),
                         ],
                       ),
+                      if (projects.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Text(
+                            tr('Long-press a project to open or delete it.'),
+                            style: text.bodySmall?.copyWith(color: p.muted),
+                          ),
+                        ),
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -1193,6 +1319,7 @@ class _ProjectsTabState extends State<_ProjectsTab> {
                         final pr = projects[i];
                         return GestureDetector(
                           onTap: () => _open(pr),
+                          onLongPress: () => _projectMenu(pr),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [

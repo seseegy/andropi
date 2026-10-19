@@ -38,6 +38,11 @@ export class Checkpoints {
 		return { dir, env: { GIT_DIR: dir, GIT_WORK_TREE: cwd, GIT_AUTHOR_NAME: "AndroPI", GIT_AUTHOR_EMAIL: "andropi@local", GIT_COMMITTER_NAME: "AndroPI", GIT_COMMITTER_EMAIL: "andropi@local" } };
 	}
 
+	/** Drops a folder's snapshots, e.g. when the folder itself is deleted. */
+	forget(cwd: string) {
+		rmSync(this.repo(cwd).dir, { recursive: true, force: true });
+	}
+
 	private async ensure(cwd: string) {
 		const { dir, env } = this.repo(cwd);
 		if (!existsSync(join(dir, "HEAD"))) {

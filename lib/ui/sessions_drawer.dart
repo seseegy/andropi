@@ -5,6 +5,7 @@ import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import '../agent/models.dart';
 import 'accounts_screen.dart';
+import 'delete_flows.dart';
 import 'repos_screen.dart';
 import 'kit.dart';
 import 'settings_hub.dart';
@@ -57,7 +58,6 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
   }
 
   Future<void> _sessionMenu(SessionSummary s) async {
-    final active = s.id == agent.sessionId;
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -79,10 +79,8 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
               onTap: () => Navigator.of(context).pop('rename'),
             ),
             ListTile(
-              enabled: !active,
-              leading: Icon(LucideIcons.trash2, color: active ? null : context.palette.danger),
-              title: Text('Delete', style: TextStyle(color: active ? null : context.palette.danger)),
-              subtitle: active ? const Text('Switch to another session first') : null,
+              leading: Icon(LucideIcons.trash2, color: context.palette.danger),
+              title: Text('Delete', style: TextStyle(color: context.palette.danger)),
               onTap: () => Navigator.of(context).pop('delete'),
             ),
             const SizedBox(height: 8),
@@ -107,7 +105,7 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
       controller.dispose();
       if (name != null && name.trim().isNotEmpty) await agent.renameSession(s.path, name.trim());
     } else if (action == 'delete') {
-      await agent.deleteSession(s.path);
+      if (!await deleteChats(context, agent, [s])) return;
     }
     _reload();
   }

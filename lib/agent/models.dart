@@ -51,6 +51,20 @@ class CustomModel {
   int? get contextWindow => (json['contextWindow'] as num?)?.toInt();
 }
 
+class ProjectDeleteCheck {
+  ProjectDeleteCheck(this.json);
+  final Map<String, dynamic> json;
+
+  int get chats => json['chats'] as int? ?? 0;
+  bool get isGit => json['git'] == true;
+  int get changes => json['changes'] as int? ?? 0;
+  int get unpushed => json['unpushed'] as int? ?? 0;
+  List<String> get blockers => (json['blockers'] as List? ?? const []).cast<String>();
+
+  /// Work that exists only on this phone and is lost with the folder.
+  bool get losesWork => changes > 0 || unpushed > 0;
+}
+
 class SessionSummary {
   SessionSummary(this.json);
   final Map<String, dynamic> json;
