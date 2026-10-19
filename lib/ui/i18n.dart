@@ -509,4 +509,7 @@ const _id = <String, String>{
   'Models found': 'Model ditemukan',
   'Could not start a shell': 'Gagal menyalakan shell',
   'Models': 'Model',
+  'Switch model': 'Ganti model',
+  'Nothing to retry': 'Tidak ada yang bisa diulang',
+  'The agent is still working': 'Agent masih bekerja',
 };

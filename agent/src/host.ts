@@ -514,6 +514,18 @@ async function handle(cmd: Command): Promise<unknown> {
 			}).catch((e) => send({ type: "error", message: String(e?.message ?? e) }));
 			return null;
 		}
+		case "retry": {
+			// After a failed turn: continue it if the request made it into the history, else send the prompt again.
+			if (s.isStreaming) throw new Error("The agent is still working");
+			checkBudget();
+			const last = s.messages.at(-1) as any;
+			const failedTurn = last && (last.role === "user" || (last.role === "assistant" && last.stopReason === "error"));
+			const text = failedTurn ? "Continue where you left off (the previous request failed)." : lastUserText;
+			if (!text) throw new Error("Nothing to retry");
+			fallbackTried = false;
+			s.prompt(text).catch((e) => send({ type: "error", message: String(e?.message ?? e) }));
+			return null;
+		}
 		case "steer":
 			await s.steer(cmd.text);
 			return null;

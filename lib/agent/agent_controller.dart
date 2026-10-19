@@ -206,6 +206,22 @@ class AgentController extends ChangeNotifier {
     }
   }
 
+  /// Tries the last failed request again (on the current model, which may have been changed since).
+  Future<void> retry() async {
+    try {
+      await client.call('retry');
+    } on AgentError catch (e) {
+      _addNotice(e.message, error: true);
+    }
+  }
+
+  /// Whether the transcript ends in an error the user could retry.
+  bool get endsInError {
+    if (busy || entries.isEmpty) return false;
+    final last = entries.last;
+    return (last is AssistantEntry && last.error != null && !last.aborted) || (last is NoticeEntry && last.error);
+  }
+
   /// Rewinds to just before a user message; returns its text for editing.
   Future<String> editMessage(String entryId) async {
     final r = await client.call<Map>('edit_message', {'entryId': entryId});

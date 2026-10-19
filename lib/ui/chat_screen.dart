@@ -386,11 +386,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _transcript() {
     final entries = agent.entries;
+    final retry = agent.endsInError;
     return ListView.builder(
       controller: scroll,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      itemCount: entries.length,
+      itemCount: entries.length + (retry ? 1 : 0),
       itemBuilder: (context, i) {
+        if (i == entries.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: _RetryBar(onRetry: agent.retry, onPickModel: () => showModelSheet(context, agent)),
+          );
+        }
         final e = entries[i];
         final child = switch (e) {
           UserEntry() => UserMessageView(
@@ -406,6 +413,33 @@ class _ChatScreenState extends State<ChatScreen> {
           child: child,
         );
       },
+    );
+  }
+}
+
+/// Shown under a failed turn: try again, or switch model first.
+class _RetryBar extends StatelessWidget {
+  const _RetryBar({required this.onRetry, required this.onPickModel});
+  final VoidCallback onRetry;
+  final VoidCallback onPickModel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(LucideIcons.rotateCcw, size: 16),
+          label: Text(tr('Try again')),
+        ),
+        OutlinedButton.icon(
+          onPressed: onPickModel,
+          icon: const Icon(LucideIcons.sparkles, size: 16),
+          label: Text(tr('Switch model')),
+        ),
+      ],
     );
   }
 }
