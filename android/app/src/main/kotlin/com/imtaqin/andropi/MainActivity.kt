@@ -1,9 +1,6 @@
 package com.imtaqin.andropi
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -33,8 +30,9 @@ class MainActivity : FlutterFragmentActivity() {
         const val ACTION_NEW_CHAT = "com.imtaqin.andropi.NEW_CHAT"
         const val ACTION_VOICE = "com.imtaqin.andropi.VOICE"
         const val ACTION_UPDATE = "com.imtaqin.andropi.UPDATE"
+        /** A notification tap; the launch map rides along (Notifications.kt). */
+        const val ACTION_OPEN = "com.imtaqin.andropi.OPEN"
         private const val VOICE_REQUEST = 4101
-        private const val UPDATES_CHANNEL = "updates"
     }
 
     private var events: EventChannel.EventSink? = null
@@ -112,13 +110,22 @@ class MainActivity : FlutterFragmentActivity() {
                     // The toolchain environment, for terminals the app opens.
                     "environment" -> result.success(AgentRuntime.prepareEnvironment(applicationContext))
                     "setBusy" -> {
-                        AgentService.setActive(this, call.arguments as Boolean)
+                        AgentService.setActive(this, call.arguments as Boolean, stoppable = true)
+                        result.success(null)
+                    }
+                    // What the agent is doing, for the ongoing notification.
+                    "busyText" -> {
+                        AgentService.update(this, call.argument<String>("title"), call.argument<String>("text"))
                         result.success(null)
                     }
                     // Keeps the process alive for queued runs and schedules.
                     "keepAlive" -> {
                         val on = call.argument<Boolean>("on") == true
-                        AgentService.setActive(this, on, call.argument<String>("text") ?: "Background tasks active")
+                        AgentService.setActive(
+                            this, on,
+                            call.argument<String>("text")
+                                ?: Notifications.t(this, "Background tasks active", "Background task aktif"),
+                        )
                         result.success(null)
                     }
                     // Shared storage: "All files access" is granted in system settings.
@@ -183,11 +190,23 @@ class MainActivity : FlutterFragmentActivity() {
                         pendingLaunch = null
                     }
                     "notify" -> {
-                        notify(
+                        @Suppress("UNCHECKED_CAST")
+                        val actions = (call.argument<List<Map<String, Any?>>>("actions") ?: emptyList()).map {
+                            (it["label"] as String) to (it["launch"] as Map<String, Any?>)
+                        }
+                        Notifications.post(
+                            this,
                             call.argument<Int>("id") ?: 100,
+                            call.argument<String>("channel") ?: Notifications.CHATS,
                             call.argument<String>("title") ?: "AndroPI",
                             call.argument<String>("body") ?: "",
+                            call.argument<Map<String, Any?>>("launch"),
+                            actions,
                         )
+                        result.success(null)
+                    }
+                    "cancelNotification" -> {
+                        Notifications.cancel(this, call.arguments as Int)
                         result.success(null)
                     }
                     "requestNotifications" -> {
@@ -223,6 +242,7 @@ class MainActivity : FlutterFragmentActivity() {
             ACTION_NEW_CHAT -> mapOf("action" to "new_chat")
             ACTION_VOICE -> mapOf("action" to "voice")
             ACTION_UPDATE -> mapOf("action" to "update")
+            ACTION_OPEN -> Notifications.launchOf(this, intent) ?: return
             Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE -> {
                 val uris = mutableListOf<Uri>()
                 @Suppress("DEPRECATION")
@@ -258,30 +278,6 @@ class MainActivity : FlutterFragmentActivity() {
         mapOf("path" to target.path, "name" to target.name, "mime" to contentResolver.getType(uri))
     } catch (e: Exception) {
         null
-    }
-
-    // -------------------------------------------------------------------------
-    // Notifications
-
-    private fun notify(id: Int, title: String, body: String) {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(UPDATES_CHANNEL, "Agent updates", NotificationManager.IMPORTANCE_DEFAULT)
-        )
-        val open = PendingIntent.getActivity(
-            this, id,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val n = android.app.Notification.Builder(this, UPDATES_CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_agent)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(android.app.Notification.BigTextStyle().bigText(body))
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .build()
-        manager.notify(id, n)
     }
 
     /** The Play build removes MANAGE_EXTERNAL_STORAGE from its manifest; the GitHub build keeps it. */

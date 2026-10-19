@@ -64,8 +64,31 @@ class AgentClient {
   Future<Map<String, dynamic>?> takeLaunch() async =>
       (await _method.invokeMethod<Map>('takeLaunch'))?.cast<String, dynamic>();
 
-  Future<void> notify(int id, String title, String body) =>
-      _method.invokeMethod('notify', {'id': id, 'title': title, 'body': body});
+  /// Posts a notification on [channel] (approvals, chats, tasks, sync). Tapping it opens the app with [launch]
+  /// (see HomeShell._takeLaunch); each of [actions] is a button with its own label and launch.
+  Future<void> notify(
+    int id,
+    String title,
+    String body, {
+    String channel = 'chats',
+    Map<String, Object?>? launch,
+    List<({String label, Map<String, Object?> launch})> actions = const [],
+  }) => _method.invokeMethod('notify', {
+    'id': id,
+    'title': title,
+    'body': body,
+    'channel': channel,
+    'launch': launch,
+    'actions': [
+      for (final a in actions) {'label': a.label, 'launch': a.launch},
+    ],
+  });
+
+  Future<void> cancelNotification(int id) => _method.invokeMethod('cancelNotification', id);
+
+  /// What the agent is doing, shown on its ongoing notification.
+  Future<void> busyText({String? title, String? text}) =>
+      _method.invokeMethod('busyText', {'title': title, 'text': text});
 
   Future<void> requestNotifications() => _method.invokeMethod('requestNotifications');
 

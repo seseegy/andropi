@@ -53,6 +53,7 @@ class SyncStatus {
   }
 
   String? get lastError => json['lastError'] as String?;
+  int get failures => json['failures'] as int? ?? 0;
   List<String> get skipped => (json['skipped'] as List? ?? const []).cast<String>();
   List<String> get localOnly => (json['localOnly'] as List? ?? const []).cast<String>();
   Map<String, int> get imported => ((json['imported'] as Map?) ?? const {}).cast<String, int>();

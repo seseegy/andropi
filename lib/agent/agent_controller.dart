@@ -55,6 +55,9 @@ class AgentController extends ChangeNotifier {
 
   bool get hasModel => model != null;
 
+  /// The tool the agent is running right now, for the ongoing notification.
+  String? runningTool;
+
   // -------------------------------------------------------------------------
   // Lifecycle
 
@@ -216,10 +219,23 @@ class AgentController extends ChangeNotifier {
   }
 
   /// Whether the transcript ends in an error the user could retry.
-  bool get endsInError {
-    if (busy || entries.isEmpty) return false;
+  bool get endsInError => !busy && lastTurnError != null;
+
+  /// The error the transcript ends in, if any (also while the run is still winding down).
+  String? get lastTurnError {
+    if (entries.isEmpty) return null;
     final last = entries.last;
-    return (last is AssistantEntry && last.error != null && !last.aborted) || (last is NoticeEntry && last.error);
+    if (last is AssistantEntry && last.error != null && !last.aborted) return last.error;
+    if (last is NoticeEntry && last.error) return last.text;
+    return null;
+  }
+
+  /// A short name for the open chat: its name, else its first message.
+  String get chatTitle {
+    final name = sessionName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final first = entries.whereType<UserEntry>().firstOrNull?.text.trim().split('\n').first ?? '';
+    return first.length > 48 ? '${first.substring(0, 47)}…' : (first.isEmpty ? 'AndroPI' : first);
   }
 
   /// Rewinds to just before a user message; returns its text for editing.
@@ -339,6 +355,7 @@ class AgentController extends ChangeNotifier {
         _setBusy(true);
       case 'agent_settled':
         _setBusy(false);
+        runningTool = null;
         _streaming = null;
         _refreshStateQuietly();
       case 'message_start':
@@ -353,6 +370,7 @@ class AgentController extends ChangeNotifier {
         }
       case 'tool_execution_start':
         tools[e['toolCallId'] as String] = ToolRun(e['toolCallId'] as String);
+        runningTool = e['toolName'] as String?;
       case 'tool_execution_update':
         final run = tools.putIfAbsent(e['toolCallId'] as String, () => ToolRun(e['toolCallId'] as String));
         run.output = contentText((e['partialResult'] as Map?)?['content']);
@@ -360,6 +378,7 @@ class AgentController extends ChangeNotifier {
         final run = tools.putIfAbsent(e['toolCallId'] as String, () => ToolRun(e['toolCallId'] as String));
         run.output = contentText((e['result'] as Map?)?['content']);
         run.status = e['isError'] == true ? ToolStatus.failed : ToolStatus.done;
+        runningTool = null;
       case 'compaction_start':
         _addNotice('Compacting context…');
       case 'session_info_changed':

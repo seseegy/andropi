@@ -1,8 +1,6 @@
 package com.imtaqin.andropi
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -17,35 +15,57 @@ import android.os.IBinder
  */
 class AgentService : Service() {
     companion object {
-        private const val CHANNEL = "agent"
         private const val ID = 1
+        private var active = false
 
-        fun setActive(context: Context, active: Boolean, text: String = "Agent is working") {
-            val intent = Intent(context, AgentService::class.java).putExtra("text", text)
-            if (active) context.startForegroundService(intent)
+        /**
+         * [stoppable]: the agent itself is working (not just background tasks), so the notification offers Stop.
+         * [title] and [text] default to a generic "working" line.
+         */
+        fun setActive(
+            context: Context,
+            on: Boolean,
+            text: String? = null,
+            title: String? = null,
+            stoppable: Boolean = false,
+        ) {
+            val intent = Intent(context, AgentService::class.java)
+                .putExtra("text", text)
+                .putExtra("title", title)
+                .putExtra("stoppable", stoppable)
+            active = on
+            if (on) context.startForegroundService(intent)
             else context.stopService(intent)
+        }
+
+        /** Refreshes the ongoing notification while it is shown (current chat and tool). */
+        fun update(context: Context, title: String?, text: String?) {
+            if (active) setActive(context, true, text, title, stoppable = true)
         }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Agent activity", NotificationManager.IMPORTANCE_LOW)
+        Notifications.ensureChannels(this)
+        val stop = PendingIntent.getBroadcast(
+            this, 0, Intent(this, StopReceiver::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
-        val open = PendingIntent.getActivity(
-            this, 0,
-            packageManager.getLaunchIntentForPackage(packageName),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val notification = Notification.Builder(this, CHANNEL)
+        val builder = Notification.Builder(this, Notifications.ACTIVITY)
             .setSmallIcon(R.drawable.ic_stat_agent)
-            .setContentTitle("AndroPI")
-            .setContentText(intent?.getStringExtra("text") ?: "Agent is working")
-            .setContentIntent(open)
+            .setContentTitle(intent?.getStringExtra("title") ?: "AndroPI")
+            .setContentText(
+                intent?.getStringExtra("text") ?: Notifications.t(this, "Agent is working", "Agent sedang bekerja")
+            )
+            .setContentIntent(Notifications.openIntent(this, 0, mapOf("action" to "open_chat")))
             .setOngoing(true)
-            .build()
+            .setOnlyAlertOnce(true)
+        if (intent?.getBooleanExtra("stoppable", false) == true) {
+            builder.addAction(
+                Notification.Action.Builder(null, Notifications.t(this, "Stop", "Hentikan"), stop).build()
+            )
+        }
+        val notification = builder.build()
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {

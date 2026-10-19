@@ -563,4 +563,15 @@ const _id = <String, String>{
   'Projects live in the AndroPI workspace. To bring in files from your phone, open a project and use Files → Import from phone.': 'Project disimpan di workspace AndroPI. Untuk memasukkan file dari HP, buka sebuah project lalu pakai Files → Impor dari HP.',
   'To work in Download, Documents or any other folder on your phone, AndroPI needs "All files access". Turn it on for AndroPI on the next screen, then come back.': 'Untuk bekerja di Download, Documents, atau folder lain di HP, AndroPI butuh izin "Akses semua file". Nyalakan untuk AndroPI di layar berikutnya, lalu kembali ke sini.',
   'GitHub sync is off': 'Sinkron GitHub mati',
+  // Notifications
+  'Task done': 'Task selesai',
+  'Task cancelled': 'Task dibatalkan',
+  'Task failed': 'Task gagal',
+  'pi stopped with an error': 'pi berhenti karena error',
+  'pi is done': 'pi selesai',
+  'Tap to see the result': 'Ketuk untuk melihat hasilnya',
+  'pi needs your approval': 'pi butuh persetujuanmu',
+  'Agent is working': 'Agent sedang bekerja',
+  'Running': 'Menjalankan',
+  'GitHub sync is failing': 'Sinkron GitHub gagal terus',
 };

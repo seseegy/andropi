@@ -2,9 +2,7 @@ package com.imtaqin.andropi
 
 import android.Manifest
 import android.app.DownloadManager
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -30,7 +28,6 @@ import java.security.MessageDigest
  */
 object Updater {
     private const val PREFS = "updater"
-    private const val CHANNEL = "app_updates"
     private const val NOTIFICATION_ID = 4200
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -229,26 +226,16 @@ object Updater {
         if (id != prefs.getLong("id", -1)) return
         val ok = status(context)["status"] == "done"
         val version = prefs.getString("version", "") ?: ""
-        val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
-        if (Build.VERSION.SDK_INT >= 33 &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
-        val open = PendingIntent.getActivity(
-            context, NOTIFICATION_ID,
-            Intent(context, MainActivity::class.java)
-                .setAction(MainActivity.ACTION_UPDATE)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        Notifications.post(
+            context,
+            NOTIFICATION_ID,
+            Notifications.APP_UPDATES,
+            if (ok) Notifications.t(context, "AndroPI $version is ready", "AndroPI $version siap dipasang")
+            else Notifications.t(context, "AndroPI update failed", "Update AndroPI gagal"),
+            if (ok) Notifications.t(context, "Tap to install the update", "Ketuk untuk memasang update")
+            else Notifications.t(context, "Tap to try again", "Ketuk untuk mencoba lagi"),
+            mapOf("action" to "update"),
         )
-        val notification = android.app.Notification.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_agent)
-            .setContentTitle(if (ok) "AndroPI $version is ready" else "AndroPI update failed")
-            .setContentText(if (ok) "Tap to install the update" else "Tap to try again")
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .build()
-        manager.notify(NOTIFICATION_ID, notification)
     }
 }
 

@@ -47,6 +47,8 @@ export interface SyncStatus {
 	repo: string | null;
 	lastSync: number | null;
 	lastError: string | null;
+	/** Failed syncs in a row; the app notifies once this reaches a few. */
+	failures: number;
 	/** Files left out because they are too big for GitHub. */
 	skipped: string[];
 	/** Projects deleted on another phone but kept on this one; they are no longer uploaded. */
@@ -59,6 +61,7 @@ interface State {
 	enabled: boolean;
 	lastSync: number | null;
 	lastError: string | null;
+	failures: number;
 	skipped: string[];
 	imported: SyncStatus["imported"];
 	/** Item keys present after the last sync, to tell "deleted here" from "new elsewhere". */
@@ -95,6 +98,7 @@ export class GitHubSync {
 			enabled: false,
 			lastSync: null,
 			lastError: null,
+			failures: 0,
 			skipped: [],
 			imported: { chats: 0, projects: 0, config: 0, removed: 0 },
 			synced: [],
@@ -108,8 +112,8 @@ export class GitHubSync {
 	}
 
 	status(): SyncStatus {
-		const { enabled, lastSync, lastError, skipped, imported, localOnly } = this.state;
-		return { enabled, running: this.running, repo: this.repo, lastSync, lastError, skipped, localOnly, imported };
+		const { enabled, lastSync, lastError, failures, skipped, imported, localOnly } = this.state;
+		return { enabled, running: this.running, repo: this.repo, lastSync, lastError, failures, skipped, localOnly, imported };
 	}
 
 	private save() {
@@ -121,6 +125,7 @@ export class GitHubSync {
 		if (on && !this.deps.integrations.summary().github) throw new Error("Sign in to GitHub first");
 		this.state.enabled = on;
 		this.state.lastError = null;
+		this.state.failures = 0;
 		this.save();
 		if (on) this.schedule(0);
 		else clearTimeout(this.timer);
@@ -150,8 +155,10 @@ export class GitHubSync {
 		try {
 			await this.sync();
 			this.state.lastError = null;
+			this.state.failures = 0;
 		} catch (e) {
 			this.state.lastError = String((e as Error)?.message ?? e).slice(0, 500);
+			this.state.failures++;
 		} finally {
 			this.running = false;
 			this.save();

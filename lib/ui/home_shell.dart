@@ -25,6 +25,7 @@ import 'settings_hub.dart';
 import 'settings_screen.dart';
 import 'skills_screen.dart';
 import 'tasks_screen.dart';
+import 'sync_screen.dart';
 import 'theme.dart';
 import 'update_sheet.dart';
 
@@ -67,23 +68,28 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final f = agent.features;
     subs
       ..add(agent.client.records.where((r) => r['type'] == 'launch').listen((_) => _takeLaunch()))
-      ..add(
-        f.done.stream.listen((preview) {
-          // Id 1 belongs to the foreground service notification, which is removed when the agent stops.
-          if (_inBackground) agent.client.notify(11, 'pi is done', preview.isEmpty ? 'Tap to see the result' : preview);
-        }),
-      )
+      ..add(f.done.stream.listen(_notifyDone))
       ..add(
         f.runFinished.stream.listen((run) {
-          final ok = run.status == 'done';
+          final title = switch (run.status) {
+            'done' => tr('Task done'),
+            'cancelled' => tr('Task cancelled'),
+            _ => tr('Task failed'),
+          };
           agent.client.notify(
             2000 + run.id.hashCode % 1000,
-            ok ? 'Task done: ${run.title}' : 'Task ${run.status}: ${run.title}',
+            '$title: ${run.title}',
             run.summary ?? '',
+            channel: 'tasks',
+            launch: run.sessionFile != null
+                ? {'action': 'open_chat', 'path': run.sessionFile}
+                : {'action': 'open_tasks'},
           );
         }),
       );
     f.addListener(_onFeatures);
+    agent.addListener(_onAgent);
+    agent.integrations.addListener(_onSync);
     f.refreshRuns().catchError((_) {});
     agent.integrations.refreshSync().catchError((_) {});
     agent.client.requestNotifications().catchError((_) {});
@@ -135,6 +141,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     agent.features.removeListener(_onFeatures);
+    agent.removeListener(_onAgent);
+    agent.integrations.removeListener(_onSync);
     for (final s in subs) {
       s.cancel();
     }
@@ -144,20 +152,108 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     lifecycle = state;
-    if (state == AppLifecycleState.resumed) Updater.instance.onResume().catchError((_) {});
+    if (state == AppLifecycleState.resumed) {
+      Updater.instance.onResume().catchError((_) {});
+      // Back in the app: "pi is done" has served its purpose.
+      agent.client.cancelNotification(_doneId).catchError((_) {});
+    }
     // Leaving the app: sync shortly, before Android may stop it.
     if (state == AppLifecycleState.paused && agent.integrations.sync?.enabled == true) {
       agent.integrations.syncNow(soon: true).catchError((_) {});
     }
   }
 
-  /// Approvals that arrive while the app is in the background become notifications.
+  // Notification ids. 1 is the agent's ongoing notification (AgentService).
+  static const _doneId = 11;
+  static const _approvalId = 3;
+  static const _syncId = 40;
+
+  /// The open chat finished while the app was in the background: say whether it worked, and open that chat on tap.
+  void _notifyDone(String preview) {
+    if (!_inBackground) return;
+    final open = {'action': 'open_chat', 'path': agent.sessionFile};
+    final error = agent.lastTurnError;
+    if (error != null) {
+      agent.client.notify(
+        _doneId,
+        tr('pi stopped with an error'),
+        error,
+        launch: open,
+        actions: [
+          (label: tr('Try again'), launch: {'action': 'retry', 'path': agent.sessionFile}),
+        ],
+      );
+    } else {
+      agent.client.notify(
+        _doneId,
+        '${tr('pi is done')}: ${agent.chatTitle}',
+        preview.isEmpty ? tr('Tap to see the result') : preview,
+        launch: open,
+      );
+    }
+  }
+
+  /// Approvals that arrive while the app is in the background become notifications, gone once answered.
   void _onFeatures() {
     final pending = agent.features.approvals;
     if (pending.length > approvalsSeen && _inBackground) {
-      agent.client.notify(3, 'pi needs your approval', '${pending.last.toolName}: ${pending.last.summary}');
+      agent.client.notify(
+        _approvalId,
+        tr('pi needs your approval'),
+        '${pending.last.toolName}: ${pending.last.summary}',
+        channel: 'approvals',
+        launch: {'action': 'open_chat'},
+      );
     }
+    if (pending.isEmpty && approvalsSeen > 0) agent.client.cancelNotification(_approvalId).catchError((_) {});
     approvalsSeen = pending.length;
+  }
+
+  String? _busyLine;
+
+  /// Keeps the ongoing notification on what the agent is doing (chat and tool).
+  void _onAgent() {
+    if (!agent.busy) {
+      _busyLine = null;
+      return;
+    }
+    final tool = agent.runningTool;
+    final line = '${agent.chatTitle}|$tool';
+    if (line == _busyLine) return;
+    _busyLine = line;
+    agent.client
+        .busyText(title: agent.chatTitle, text: tool == null ? tr('Agent is working') : '${tr('Running')} $tool')
+        .catchError((_) {});
+  }
+
+  bool _syncWarned = false;
+
+  /// Sync failing again and again (an expired token, a full disk) shouldn't go unnoticed.
+  void _onSync() {
+    final s = agent.integrations.sync;
+    if (s == null) return;
+    if (s.failures >= 3 && !_syncWarned) {
+      _syncWarned = true;
+      agent.client.notify(
+        _syncId,
+        tr('GitHub sync is failing'),
+        tr(s.lastError ?? 'Sync failed; tap for details'),
+        channel: 'sync',
+        launch: {'action': 'open_sync'},
+      );
+    } else if (s.failures == 0 && _syncWarned) {
+      _syncWarned = false;
+      agent.client.cancelNotification(_syncId).catchError((_) {});
+    }
+  }
+
+  /// Opens the chat a notification points at (the open one when [path] is null).
+  Future<void> _openChatAt(String? path) async {
+    if (path != null && path != agent.sessionFile) {
+      final known = (await agent.listSessions()).any((s) => s.path == path);
+      if (known) await agent.openSession(path);
+    }
+    if (mounted) await openChat(context, agent);
   }
 
   Future<void> _takeLaunch() async {
@@ -170,6 +266,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         await _newChat();
       case 'update':
         if (mounted) await showUpdateSheet(context, agent);
+      case 'open_chat':
+        await _openChatAt(launch['path'] as String?);
+      case 'retry':
+        final path = launch['path'] as String?;
+        if (path != null && path != agent.sessionFile) await agent.openSession(path);
+        await agent.retry();
+        if (mounted) await openChat(context, agent);
+      case 'open_tasks':
+        if (mounted) await Navigator.of(context).push(MaterialPageRoute(builder: (_) => TasksScreen(agent: agent)));
+      case 'open_sync':
+        if (mounted) await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SyncScreen(agent: agent)));
       case 'voice':
         await agent.newSession();
         if (mounted) await openChat(context, agent, listen: true);
