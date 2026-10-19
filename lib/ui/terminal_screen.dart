@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../agent/agent_controller.dart';
 import 'kit.dart';
+import 'terminal_pane.dart';
 import 'i18n.dart';
 import 'theme.dart';
 
@@ -146,9 +147,6 @@ void selectAllTerminal(Terminal terminal, TerminalController controller) {
   controller.setSelection(buffer.createAnchor(0, 0), buffer.createAnchor(buffer.viewWidth, buffer.height - 1));
 }
 
-/// A terminal font size: steps of 0.5, between 8 and 28.
-double terminalFontFor(double size) => ((size * 2).round() / 2).clamp(8.0, 28.0).toDouble();
-
 class TerminalScreen extends StatefulWidget {
   const TerminalScreen({super.key, required this.agent, this.command});
   final AgentController agent;
@@ -170,13 +168,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
 
   /// Font size; pinch with two fingers or A−/A+ to change it.
   double fontSize = Appearance.instance.terminalFontSize;
-  final _pointers = <int, Offset>{};
-  double? _pinchStartDistance;
-
-  /// While pinching the terminal is only scaled; the font (and the pty size) changes once, on release.
-  final _pinchScale = ValueNotifier<double>(1);
-  final scroll = ScrollController();
-  double _pinchScrollOffset = 0;
+  final _pane = GlobalKey<TerminalPaneState>();
 
   /// Whether the selection toolbar shows: a selection in the buffer on screen, and not left over from a pinch.
   final _hasSelection = ValueNotifier(false);
@@ -220,8 +212,6 @@ class _TerminalScreenState extends State<TerminalScreen> {
     controller.removeListener(_refreshSelection);
     _watched?.removeListener(_refreshSelection);
     _hasSelection.dispose();
-    _pinchScale.dispose();
-    scroll.dispose();
     for (final s in sessions) {
       s.terminal.onOutput = s.input;
     }
@@ -483,45 +473,25 @@ class _TerminalScreenState extends State<TerminalScreen> {
           : Column(
               children: [
                 Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Listener(
-                          onPointerDown: _pointerDown,
-                          onPointerMove: _pointerMove,
-                          onPointerUp: _pointerUp,
-                          onPointerCancel: _pointerUp,
-                          child: ValueListenableBuilder<double>(
-                            valueListenable: _pinchScale,
-                            builder: (context, scale, child) => scale == 1
-                                ? child!
-                                : ClipRect(
-                                    child: Transform.scale(scale: scale, alignment: Alignment.topLeft, child: child),
-                                  ),
-                            child: TerminalView(
-                              s.terminal,
-                              key: ObjectKey(s),
-                              controller: controller,
-                              scrollController: scroll,
-                              focusNode: focus,
-                              autofocus: true,
-                              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                              keyboardType: TextInputType.visiblePassword,
-                              keyboardAppearance: dark ? Brightness.dark : Brightness.light,
-                              textStyle: TerminalStyle(fontFamily: mono, fontSize: fontSize),
-                              theme: dark ? _darkTheme(p) : _lightTheme(p),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Long-press selects; this bar copies it, selects everything, or pastes.
-                      ValueListenableBuilder<bool>(
-                        valueListenable: _hasSelection,
-                        builder: (context, shown, _) => shown
-                            ? Positioned(top: 8, left: 0, right: 0, child: Center(child: _selectionBar(p, s)))
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
+                  child: TerminalPane(
+                    key: _pane,
+                    terminal: s.terminal,
+                    controller: controller,
+                    focusNode: focus,
+                    fontSize: fontSize,
+                    dark: dark,
+                    theme: dark ? _darkTheme(p) : _lightTheme(p),
+                    onPinchStart: controller.clearSelection,
+                    onFontSize: (size) {
+                      _setFont(size);
+                      _saveFont();
+                    },
+                    // Long-press selects; this bar copies it, selects everything, or pastes.
+                    overlay: ValueListenableBuilder<bool>(
+                      valueListenable: _hasSelection,
+                      builder: (context, shown, _) =>
+                          shown ? Center(child: _selectionBar(p, s)) : const SizedBox.shrink(),
+                    ),
                   ),
                 ),
                 _KeyBar(
@@ -550,7 +520,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   void _refreshSelection() {
     final s = session;
     final range = controller.selection;
-    if (range != null && _pinchStartDistance != null) {
+    if (range != null && (_pane.currentState?.pinching ?? false)) {
       // A long-press that fired under a pinching finger.
       controller.clearSelection();
       return;
@@ -601,41 +571,6 @@ class _TerminalScreenState extends State<TerminalScreen> {
   }
 
   void _saveFont() => Appearance.instance.setTerminalFontSize(fontSize);
-
-  // Two-finger pinch, read from raw pointers so it doesn't fight the terminal's own drag and long-press.
-  void _pointerDown(PointerDownEvent e) {
-    _pointers[e.pointer] = e.position;
-    if (_pointers.length == 2) {
-      final pts = _pointers.values.toList();
-      _pinchStartDistance = (pts[0] - pts[1]).distance;
-      _pinchScrollOffset = scroll.hasClients ? scroll.offset : 0;
-      controller.clearSelection();
-    }
-  }
-
-  void _pointerMove(PointerMoveEvent e) {
-    if (!_pointers.containsKey(e.pointer)) return;
-    _pointers[e.pointer] = e.position;
-    final start = _pinchStartDistance;
-    if (_pointers.length != 2 || start == null || start < 10) return;
-    final pts = _pointers.values.toList();
-    final target = terminalFontFor(fontSize * (pts[0] - pts[1]).distance / start);
-    _pinchScale.value = target / fontSize;
-    // The first finger also drives the terminal's scrolling; hold it still while pinching.
-    if (scroll.hasClients && scroll.offset != _pinchScrollOffset) scroll.jumpTo(_pinchScrollOffset);
-  }
-
-  void _pointerUp(PointerEvent e) {
-    _pointers.remove(e.pointer);
-    if (_pointers.length < 2 && _pinchStartDistance != null) {
-      _pinchStartDistance = null;
-      // Apply once: every font change resizes the pty, which makes TUIs redraw.
-      _setFont(fontSize * _pinchScale.value);
-      _pinchScale.value = 1;
-      _saveFont();
-      controller.clearSelection();
-    }
-  }
 
   Widget _selectionBar(Palette p, ShellSession s) {
     Widget action(String label, IconData icon, VoidCallback onTap) => InkWell(
