@@ -9,6 +9,7 @@ import 'illustration.dart';
 import 'kit.dart';
 import 'message_views.dart';
 import 'task_log.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 String _ago(DateTime t) {
@@ -138,17 +139,17 @@ class _GitScreenState extends State<GitScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discard changes?'),
+        title: Text(tr('Discard changes?')),
         content: Text(
           file.untracked
               ? '${file.path} is untracked and will be deleted. This cannot be undone.'
               : 'Your changes to ${file.path} will be lost. This cannot be undone.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Discard', style: TextStyle(color: context.palette.danger)),
+            child: Text(tr('Discard'), style: TextStyle(color: context.palette.danger)),
           ),
         ],
       ),
@@ -222,7 +223,7 @@ class _GitScreenState extends State<GitScreen> {
     if (url == null) return;
     _snack(
       'Pull request created',
-      action: SnackBarAction(label: 'Open', onPressed: () => widget.agent.client.openUrl(url)),
+      action: SnackBarAction(label: tr('Open'), onPressed: () => widget.agent.client.openUrl(url)),
     );
   }
 
@@ -264,8 +265,8 @@ class _GitScreenState extends State<GitScreen> {
     final s = _status;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Git'),
-        actions: [IconButton(tooltip: 'Refresh', icon: const Icon(LucideIcons.refreshCw), onPressed: _refresh)],
+        title: Text(tr('Git')),
+        actions: [IconButton(tooltip: tr('Refresh'), icon: const Icon(LucideIcons.refreshCw), onPressed: _refresh)],
       ),
       body: s == null
           ? const Center(child: CircularProgressIndicator())
@@ -297,7 +298,7 @@ class _GitScreenState extends State<GitScreen> {
         children: [
           const Illustration('git', height: 160),
           const SizedBox(height: 20),
-          Text('Not a git repository', textAlign: TextAlign.center, style: text.titleMedium),
+          Text(tr('Not a git repository'), textAlign: TextAlign.center, style: text.titleMedium),
           const SizedBox(height: 6),
           Text(
             "This folder isn't a git repository. Ask pi to run `git init`, or clone a repo.",
@@ -354,9 +355,9 @@ class _GitScreenState extends State<GitScreen> {
               const SizedBox(width: 6),
               Pill('${s.behind}', icon: LucideIcons.arrowDown, color: s.behind > 0 ? p.warning : null),
               const Spacer(),
-              _SmallButton(icon: LucideIcons.download, label: 'Pull', onTap: () => _pullPush(push: false)),
+              _SmallButton(icon: LucideIcons.download, label: tr('Pull'), onTap: () => _pullPush(push: false)),
               const SizedBox(width: 8),
-              _SmallButton(icon: LucideIcons.upload, label: 'Push', onTap: () => _pullPush(push: true)),
+              _SmallButton(icon: LucideIcons.upload, label: tr('Push'), onTap: () => _pullPush(push: true)),
             ],
           ),
         ],
@@ -406,9 +407,9 @@ class _GitScreenState extends State<GitScreen> {
                       children: [
                         Icon(LucideIcons.circleCheck, size: 36, color: p.success),
                         const SizedBox(height: 12),
-                        Text('Working tree clean', style: text.titleMedium),
+                        Text(tr('Working tree clean'), style: text.titleMedium),
                         const SizedBox(height: 4),
-                        Text('No changes to commit', style: text.bodySmall),
+                        Text(tr('No changes to commit'), style: text.bodySmall),
                       ],
                     ),
                   ),
@@ -439,7 +440,7 @@ class _GitScreenState extends State<GitScreen> {
                 if (s.files.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
-                    child: Text('Long-press a file to discard its changes.', style: text.bodySmall),
+                    child: Text(tr('Long-press a file to discard its changes.'), style: text.bodySmall),
                   ),
               ],
             ),
@@ -462,7 +463,7 @@ class _GitScreenState extends State<GitScreen> {
                   minLines: 1,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(hintText: 'Commit message'),
+                  decoration: InputDecoration(hintText: tr('Commit message')),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -481,7 +482,7 @@ class _GitScreenState extends State<GitScreen> {
                               color: _commitAll ? p.text : p.muted,
                             ),
                             const SizedBox(width: 6),
-                            Text('Commit all changes', style: text.bodySmall?.copyWith(color: p.text)),
+                            Text(tr('Commit all changes'), style: text.bodySmall?.copyWith(color: p.text)),
                           ],
                         ),
                       ),
@@ -491,13 +492,13 @@ class _GitScreenState extends State<GitScreen> {
                       TextButton.icon(
                         onPressed: _createPr,
                         icon: const Icon(LucideIcons.gitPullRequest, size: 16),
-                        label: const Text('Create pull request'),
+                        label: Text(tr('Create pull request')),
                       ),
                   ],
                 ),
                 const SizedBox(height: 6),
                 PrimaryButton(
-                  label: 'Commit',
+                  label: tr('Commit'),
                   icon: LucideIcons.gitCommitHorizontal,
                   busy: _committing,
                   onPressed: canCommit ? _commit : null,
@@ -627,7 +628,7 @@ class _GitScreenState extends State<GitScreen> {
           if (log.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 40),
-              child: Text('No commits yet', textAlign: TextAlign.center, style: text.bodyMedium),
+              child: Text(tr('No commits yet'), textAlign: TextAlign.center, style: text.bodyMedium),
             )
           else
             SettingsGroup(
@@ -721,7 +722,7 @@ class _GitScreenState extends State<GitScreen> {
           if (issues.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 40),
-              child: Text('No open issues or pull requests', textAlign: TextAlign.center, style: text.bodyMedium),
+              child: Text(tr('No open issues or pull requests'), textAlign: TextAlign.center, style: text.bodyMedium),
             )
           else
             SettingsGroup(
@@ -943,7 +944,7 @@ class _BranchSheetState extends State<_BranchSheet> {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
             children: [
-              Text('Branches', style: text.titleLarge),
+              Text(tr('Branches'), style: text.titleLarge),
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -952,14 +953,14 @@ class _BranchSheetState extends State<_BranchSheet> {
                       controller: _name,
                       autocorrect: false,
                       style: const TextStyle(fontFamily: mono, fontSize: 14),
-                      decoration: const InputDecoration(hintText: 'New branch name'),
+                      decoration: InputDecoration(hintText: tr('New branch name')),
                       onSubmitted: (v) => v.trim().isEmpty ? null : _checkout(v.trim(), create: true),
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
                     style: IconButton.styleFrom(backgroundColor: p.text, foregroundColor: p.inverse),
-                    tooltip: 'Create branch',
+                    tooltip: tr('Create branch'),
                     onPressed: name.isEmpty || _busy != null ? null : () => _checkout(name, create: true),
                     icon: const Icon(LucideIcons.plus, size: 18),
                   ),
@@ -972,11 +973,11 @@ class _BranchSheetState extends State<_BranchSheet> {
                 )
               else ...[
                 if (local.isNotEmpty) ...[
-                  const SectionLabel('Local'),
+                  SectionLabel(tr('Local')),
                   SettingsGroup(children: [for (final b in local) row(b)]),
                 ],
                 if (remote.isNotEmpty) ...[
-                  const SectionLabel('Remote'),
+                  SectionLabel(tr('Remote')),
                   SettingsGroup(children: [for (final b in remote) row(b)]),
                 ],
               ],
@@ -1024,7 +1025,7 @@ class _DiffSheetState extends State<_DiffSheet> {
               );
             }
             if (snap.data!.trim().isEmpty && widget.file.untracked) {
-              return Text('New untracked file. Stage it to see its contents as a diff.', style: text.bodySmall);
+              return Text(tr('New untracked file. Stage it to see its contents as a diff.'), style: text.bodySmall);
             }
             return DiffView(patch: snap.data!);
           },
@@ -1087,14 +1088,14 @@ class _PrSheetState extends State<_PrSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Create pull request', style: text.titleLarge),
+            Text(tr('Create pull request'), style: text.titleLarge),
             const SizedBox(height: 4),
-            Text('From ${widget.branch}. Push the branch first if it is new.', style: text.bodySmall),
+            Text('${tr('From')} ${widget.branch}. ${tr('Push the branch first if it is new.')}', style: text.bodySmall),
             const SizedBox(height: 16),
             TextField(
               controller: _title,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(hintText: 'Title'),
+              decoration: InputDecoration(hintText: tr('Title')),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -1102,18 +1103,18 @@ class _PrSheetState extends State<_PrSheet> {
               minLines: 4,
               maxLines: 8,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(hintText: 'Description (Markdown)'),
+              decoration: InputDecoration(hintText: tr('Description (Markdown)')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _base,
               autocorrect: false,
               style: const TextStyle(fontFamily: mono, fontSize: 14),
-              decoration: const InputDecoration(hintText: 'Base branch (default branch if empty)'),
+              decoration: InputDecoration(hintText: tr('Base branch (default branch if empty)')),
             ),
             const SizedBox(height: 16),
             PrimaryButton(
-              label: 'Create pull request',
+              label: tr('Create pull request'),
               icon: LucideIcons.gitPullRequest,
               busy: _busy,
               onPressed: _title.text.trim().isEmpty ? null : _submit,
@@ -1173,7 +1174,7 @@ class _IssueSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               if (issue.body.trim().isEmpty)
-                Text('No description provided.', style: text.bodySmall)
+                Text(tr('No description provided.'), style: text.bodySmall)
               else
                 MarkdownText(issue.body),
             ],
@@ -1190,14 +1191,14 @@ class _IssueSheet extends StatelessWidget {
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
                     onPressed: onOpen,
                     icon: const Icon(LucideIcons.externalLink, size: 16),
-                    label: const Text('Open on GitHub'),
+                    label: Text(tr('Open on GitHub')),
                   ),
                 ),
                 if (canWork) ...[
                   const SizedBox(width: 10),
                   Expanded(
                     child: PrimaryButton(
-                      label: 'Work on this',
+                      label: tr('Work on this'),
                       icon: LucideIcons.hammer,
                       onPressed: () => Navigator.of(context).pop(true),
                     ),

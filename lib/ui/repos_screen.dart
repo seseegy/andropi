@@ -6,6 +6,7 @@ import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import 'accounts_screen.dart';
 import 'task_log.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Pick a GitHub repository, clone it into the workspace and start a session in it.
@@ -45,7 +46,7 @@ class _ReposScreenState extends State<ReposScreen> {
     final text = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Open a repository'),
+        title: Text(tr('Open a repository')),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, color: p.border),
@@ -60,7 +61,7 @@ class _ReposScreenState extends State<ReposScreen> {
                   children: [
                     Icon(SimpleIcons.github, size: 32, color: p.muted),
                     const SizedBox(height: 12),
-                    Text('Connect GitHub to see your repositories', style: text.titleSmall),
+                    Text(tr('Connect GitHub to see your repositories'), style: text.titleSmall),
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () async {
@@ -72,7 +73,7 @@ class _ReposScreenState extends State<ReposScreen> {
                           });
                         }
                       },
-                      child: const Text('Connect GitHub'),
+                      child: Text(tr('Connect GitHub')),
                     ),
                   ],
                 ),
@@ -84,8 +85,8 @@ class _ReposScreenState extends State<ReposScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: TextField(
                     onChanged: (v) => setState(() => query = v.toLowerCase()),
-                    decoration: const InputDecoration(
-                      hintText: 'Search repositories',
+                    decoration: InputDecoration(
+                      hintText: tr('Search repositories'),
                       prefixIcon: Icon(LucideIcons.search, size: 18),
                     ),
                   ),
@@ -180,7 +181,7 @@ class _RepoTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(99),
                   border: Border.all(color: p.border),
                 ),
-                child: Text('On device', style: text.labelSmall),
+                child: Text(tr('On device'), style: text.labelSmall),
               ),
           ],
         ),

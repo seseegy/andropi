@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../agent/agent_controller.dart';
 import '../agent/features.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 String _money(num v) {
@@ -69,7 +70,7 @@ class _UsageScreenState extends State<UsageScreen> {
     final value = await showDialog<double>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Daily budget'),
+        title: Text(tr('Daily budget')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,15 +82,15 @@ class _UsageScreenState extends State<UsageScreen> {
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: const InputDecoration(prefixText: r'$ ', hintText: 'No limit'),
+              decoration: InputDecoration(prefixText: r'$ ', hintText: tr('No limit')),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
           TextButton(
             onPressed: () => Navigator.pop(context, double.tryParse(ctrl.text.trim()) ?? 0),
-            child: const Text('Save'),
+            child: Text(tr('Save')),
           ),
         ],
       ),
@@ -110,7 +111,7 @@ class _UsageScreenState extends State<UsageScreen> {
     final text = Theme.of(context).textTheme;
     final rows = _rows;
     return Scaffold(
-      appBar: AppBar(title: const Text('Usage')),
+      appBar: AppBar(title: Text(tr('Usage'))),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
@@ -142,15 +143,15 @@ class _UsageScreenState extends State<UsageScreen> {
               )
             else
               ..._summary(context, rows),
-            const SectionLabel('This chat'),
+            SectionLabel(tr('This chat')),
             _sessionCard(context),
-            const SectionLabel('Limits'),
+            SectionLabel(tr('Limits')),
             SettingsGroup(
               children: [
                 SettingsRow(
                   icon: LucideIcons.wallet,
                   color: p.warning,
-                  title: 'Daily budget',
+                  title: tr('Daily budget'),
                   subtitle: _budget == 0 ? 'No limit' : '${_money(_budget)} per day',
                   onTap: _editBudget,
                 ),
@@ -201,14 +202,14 @@ class _UsageScreenState extends State<UsageScreen> {
       Row(
         children: [
           Expanded(
-            child: _StatCard(icon: LucideIcons.coins, color: p.accent, label: 'Cost', value: _money(cost)),
+            child: _StatCard(icon: LucideIcons.coins, color: p.accent, label: tr('Cost'), value: _money(cost)),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: _StatCard(
               icon: LucideIcons.activity,
               color: p.accentAlt,
-              label: 'Requests',
+              label: tr('Requests'),
               value: _compact(requests),
             ),
           ),
@@ -221,7 +222,7 @@ class _UsageScreenState extends State<UsageScreen> {
             child: _StatCard(
               icon: LucideIcons.arrowUpFromLine,
               color: p.success,
-              label: 'Input tokens',
+              label: tr('Input tokens'),
               value: _compact(input),
             ),
           ),
@@ -230,7 +231,7 @@ class _UsageScreenState extends State<UsageScreen> {
             child: _StatCard(
               icon: LucideIcons.arrowDownToLine,
               color: p.warning,
-              label: 'Output tokens',
+              label: tr('Output tokens'),
               value: _compact(output),
             ),
           ),
@@ -240,9 +241,9 @@ class _UsageScreenState extends State<UsageScreen> {
       SurfaceCard(
         child: _BarChart(values: [for (final d in days) perDay[d]!], labels: days, format: useCost ? _money : _compact),
       ),
-      const SectionLabel('By model'),
+      SectionLabel(tr('By model')),
       if (models.isEmpty)
-        SurfaceCard(child: Text('No requests in this period.', style: text.bodySmall))
+        SurfaceCard(child: Text(tr('No requests in this period.'), style: text.bodySmall))
       else
         SettingsGroup(
           children: [
@@ -263,7 +264,7 @@ class _UsageScreenState extends State<UsageScreen> {
     final text = Theme.of(context).textTheme;
     final s = _session;
     if (s == null) {
-      return SurfaceCard(child: Text('No active chat.', style: text.bodySmall));
+      return SurfaceCard(child: Text(tr('No active chat.'), style: text.bodySmall));
     }
     final tokens = s['tokens'];
     final total = tokens is Map ? _num(tokens['total']) : _num(tokens);
@@ -296,7 +297,7 @@ class _UsageScreenState extends State<UsageScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: Text('Context window', style: text.bodySmall)),
+                Expanded(child: Text(tr('Context window'), style: text.bodySmall)),
                 Text(
                   [
                     if (ctxTokens != null && window != null) '${_compact(ctxTokens)} / ${_compact(window)}',

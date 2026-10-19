@@ -6,6 +6,7 @@ import '../agent/models.dart';
 import 'custom_provider_screen.dart';
 import 'login_flow.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -41,7 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Models & providers'),
+            title: Text(tr('Models & providers')),
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(1),
               child: Divider(height: 1, color: p.border),
@@ -50,19 +51,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           body: ListView(
             padding: const EdgeInsets.only(bottom: 32),
             children: [
-              const _Header('Connected'),
+              _Header(tr('Connected')),
               if (connected.isEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text('No providers yet. Pick one below.', style: text.bodySmall),
+                  child: Text(tr('No providers yet. Pick one below.'), style: text.bodySmall),
                 ),
               for (final pr in connected) _ProviderTile(provider: pr, agent: agent),
-              const _Header('Add provider'),
+              _Header(tr('Add provider')),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                 leading: IconTile(icon: LucideIcons.server, color: p.accent, size: 38),
-                title: Text('Custom provider', style: text.titleSmall),
-                subtitle: const Text('Any compatible endpoint: base URL and API key'),
+                title: Text(tr('Custom provider'), style: text.titleSmall),
+                subtitle: Text(tr('Any compatible endpoint: base URL and API key')),
                 trailing: Icon(LucideIcons.plus, size: 18, color: p.faint),
                 onTap: () =>
                     Navigator.of(context)
@@ -72,21 +73,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: TextField(
                   onChanged: (v) => setState(() => query = v),
-                  decoration: const InputDecoration(
-                    hintText: 'Search providers',
+                  decoration: InputDecoration(
+                    hintText: tr('Search providers'),
                     prefixIcon: Icon(LucideIcons.search, size: 18),
                   ),
                 ),
               ),
               for (final pr in others) _ProviderTile(provider: pr, agent: agent),
-              const _Header('Environment'),
+              _Header(tr('Environment')),
               _InfoRow('pi', agent.info['version']?.toString() ?? '—'),
               _InfoRow('Node.js', agent.info['node']?.toString() ?? '—'),
               _InfoRow('Workspace', agent.info['workspace']?.toString() ?? '—', mono: true),
               _InfoRow('Agent directory', agent.info['agentDir']?.toString() ?? '—', mono: true),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: OutlinedButton(onPressed: agent.busy ? null : agent.restart, child: const Text('Restart agent')),
+                child: OutlinedButton(onPressed: agent.busy ? null : agent.restart, child: Text(tr('Restart agent'))),
               ),
             ],
           ),
@@ -155,7 +156,7 @@ class _ProviderTile extends StatelessWidget {
       title: Text(provider.name, style: Theme.of(context).textTheme.titleSmall),
       subtitle: Text(subtitle),
       trailing: provider.configured
-          ? Pill('Connected', color: p.success, dot: true)
+          ? Pill(tr('Connected'), color: p.success, dot: true)
           : Icon(LucideIcons.chevronRight, size: 18, color: p.faint),
       onTap: () => _open(context),
     );
@@ -190,12 +191,15 @@ class _ProviderTile extends StatelessWidget {
               children: [
                 Text(provider.name, style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 4),
-                Text('Remove the stored credential from this device.', style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  tr('Remove the stored credential from this device.'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 20),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: context.palette.danger),
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Disconnect'),
+                  child: Text(tr('Disconnect')),
                 ),
               ],
             ),
@@ -220,13 +224,13 @@ class _ProviderTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                title: const Text('Sign in with account'),
-                subtitle: const Text('Use your subscription through the browser'),
+                title: Text(tr('Sign in with account')),
+                subtitle: Text(tr('Use your subscription through the browser')),
                 onTap: () => Navigator.of(context).pop('oauth'),
               ),
               ListTile(
-                title: const Text('Use an API key'),
-                subtitle: const Text('Paste a key from the provider console'),
+                title: Text(tr('Use an API key')),
+                subtitle: Text(tr('Paste a key from the provider console')),
                 onTap: () => Navigator.of(context).pop('api_key'),
               ),
               const SizedBox(height: 8),

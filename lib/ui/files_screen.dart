@@ -11,6 +11,7 @@ import 'editor_screen.dart';
 import 'illustration.dart';
 import 'preview_screen.dart';
 import 'search_screen.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 const _imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp'};
@@ -214,12 +215,12 @@ class _FilesScreenState extends State<FilesScreen> {
           children: [
             ListTile(
               leading: const Icon(LucideIcons.eye),
-              title: const Text('Preview'),
+              title: Text(tr('Preview')),
               onTap: () => Navigator.pop(ctx, 'preview'),
             ),
             ListTile(
               leading: const Icon(LucideIcons.pencil),
-              title: const Text('Edit'),
+              title: Text(tr('Edit')),
               onTap: () => Navigator.pop(ctx, 'edit'),
             ),
           ],
@@ -259,7 +260,7 @@ class _FilesScreenState extends State<FilesScreen> {
           onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
           TextButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: Text(action)),
         ],
       ),
@@ -276,7 +277,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Future<void> _newFile() async {
-    final name = _validName(await _prompt(title: 'New file', action: 'Create'));
+    final name = _validName(await _prompt(title: tr('New file'), action: tr('Create')));
     if (name == null) return;
     final path = _join(_dir, name);
     try {
@@ -296,7 +297,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Future<void> _newFolder() async {
-    final name = _validName(await _prompt(title: 'New folder', action: 'Create'));
+    final name = _validName(await _prompt(title: tr('New folder'), action: tr('Create')));
     if (name == null) return;
     final path = _join(_dir, name);
     try {
@@ -309,7 +310,7 @@ class _FilesScreenState extends State<FilesScreen> {
   }
 
   Future<void> _rename(_Entry e) async {
-    final name = _validName(await _prompt(title: 'Rename', initial: e.name, action: 'Rename'));
+    final name = _validName(await _prompt(title: tr('Rename'), initial: e.name, action: tr('Rename')));
     if (name == null || name == e.name) return;
     final target = _join(_dirName(e.path), name);
     try {
@@ -365,16 +366,16 @@ class _FilesScreenState extends State<FilesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete ${e.isDir ? 'folder' : 'file'}?'),
+        title: Text(e.isDir ? tr('Delete folder?') : tr('Delete file?')),
         content: Text(
           e.isDir ? '"${e.name}" and everything inside it will be deleted.' : '"${e.name}" will be deleted.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Cancel'))),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: context.palette.danger),
-            child: const Text('Delete'),
+            child: Text(tr('Delete')),
           ),
         ],
       ),
@@ -511,7 +512,7 @@ class _FilesScreenState extends State<FilesScreen> {
           title: Text(_atRoot ? 'Files' : _baseName(_dir)),
           actions: [
             IconButton(
-              tooltip: 'Search',
+              tooltip: tr('Search'),
               icon: const Icon(LucideIcons.search, size: 20),
               onPressed: () =>
                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => SearchScreen(agent: agent))),
@@ -523,18 +524,18 @@ class _FilesScreenState extends State<FilesScreen> {
             ),
             PopupMenuButton<String>(
               icon: const Icon(LucideIcons.plus, size: 22),
-              tooltip: 'New',
+              tooltip: tr('New'),
               onSelected: (v) => switch (v) {
                 'file' => _newFile(),
                 'folder' => _newFolder(),
                 _ => _import(),
               },
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
                 PopupMenuItem(
                   value: 'file',
                   child: ListTile(
                     leading: Icon(LucideIcons.filePlus2),
-                    title: Text('New file'),
+                    title: Text(tr('New file')),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -542,7 +543,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   value: 'folder',
                   child: ListTile(
                     leading: Icon(LucideIcons.folderPlus),
-                    title: Text('New folder'),
+                    title: Text(tr('New folder')),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -550,7 +551,7 @@ class _FilesScreenState extends State<FilesScreen> {
                   value: 'import',
                   child: ListTile(
                     leading: Icon(LucideIcons.upload),
-                    title: Text('Import from phone'),
+                    title: Text(tr('Import from phone')),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -601,7 +602,7 @@ class _FilesScreenState extends State<FilesScreen> {
           const SizedBox(height: 40),
           const Illustration('projects', height: 150),
           const SizedBox(height: 16),
-          Text('This folder is empty', textAlign: TextAlign.center, style: t.titleMedium),
+          Text(tr('This folder is empty'), textAlign: TextAlign.center, style: t.titleMedium),
           const SizedBox(height: 4),
           Text(
             hiddenCount > 0
@@ -792,11 +793,11 @@ class _ImageViewer extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            tooltip: 'Copy path',
+            tooltip: tr('Copy path'),
             icon: const Icon(LucideIcons.copy, size: 20),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: path));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Path copied')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Path copied'))));
             },
           ),
         ],

@@ -7,6 +7,7 @@ import '../agent/features.dart';
 import 'chat_screen.dart';
 import 'illustration.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 String _basename(String path) {
@@ -118,11 +119,11 @@ class _TasksScreenState extends State<TasksScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete schedule?'),
+        title: Text(tr('Delete schedule?')),
         content: Text('"${s.name}" will stop running.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Delete'))),
         ],
       ),
     );
@@ -132,7 +133,7 @@ class _TasksScreenState extends State<TasksScreen> {
   Future<void> _runNow(ScheduleInfo s) async {
     await _guard(() => f.runScheduleNow(s.id));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Queued "${s.name}"')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Queued')}: "${s.name}"')));
     }
   }
 
@@ -146,13 +147,13 @@ class _TasksScreenState extends State<TasksScreen> {
         final runs = f.runs;
         final finished = runs.where((r) => !r.active).length;
         return Scaffold(
-          appBar: AppBar(title: const Text('Tasks')),
+          appBar: AppBar(title: Text(tr('Tasks'))),
           body: RefreshIndicator(
             onRefresh: () => _guard(f.refreshRuns),
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
               children: [
-                const SectionLabel('Run in background', padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
+                SectionLabel(tr('Run in background'), padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
                 SurfaceCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -162,7 +163,7 @@ class _TasksScreenState extends State<TasksScreen> {
                         minLines: 2,
                         maxLines: 6,
                         textInputAction: TextInputAction.newline,
-                        decoration: const InputDecoration(hintText: 'What should pi do while you are away?'),
+                        decoration: InputDecoration(hintText: tr('What should pi do while you are away?')),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -179,7 +180,7 @@ class _TasksScreenState extends State<TasksScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      PrimaryButton(label: 'Queue', icon: LucideIcons.listTodo, busy: _queueing, onPressed: _queue),
+                      PrimaryButton(label: tr('Queue'), icon: LucideIcons.listTodo, busy: _queueing, onPressed: _queue),
                       const SizedBox(height: 18),
                       Row(
                         children: [
@@ -187,8 +188,8 @@ class _TasksScreenState extends State<TasksScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Parallel agents', style: text.titleSmall),
-                                Text('How many run at once', style: text.bodySmall),
+                                Text(tr('Parallel agents'), style: text.titleSmall),
+                                Text(tr('How many run at once'), style: text.bodySmall),
                               ],
                             ),
                           ),
@@ -208,12 +209,12 @@ class _TasksScreenState extends State<TasksScreen> {
                   ),
                 ),
                 SectionLabel(
-                  'Runs',
+                  tr('Runs'),
                   trailing: finished > 0
                       ? TextButton.icon(
                           onPressed: () => _guard(f.clearRuns),
                           icon: const Icon(LucideIcons.x, size: 14),
-                          label: const Text('Clear finished'),
+                          label: Text(tr('Clear finished')),
                         )
                       : null,
                 ),
@@ -223,7 +224,7 @@ class _TasksScreenState extends State<TasksScreen> {
                       children: [
                         const Illustration('automate', height: 140),
                         const SizedBox(height: 8),
-                        Text('No runs yet. Queue a prompt above.', style: text.bodySmall),
+                        Text(tr('No runs yet. Queue a prompt above.'), style: text.bodySmall),
                       ],
                     ),
                   )
@@ -237,11 +238,11 @@ class _TasksScreenState extends State<TasksScreen> {
                     const SizedBox(height: 10),
                   ],
                 SectionLabel(
-                  'Schedules',
+                  tr('Schedules'),
                   trailing: TextButton.icon(
                     onPressed: () => _editSchedule(),
                     icon: const Icon(LucideIcons.plus, size: 14),
-                    label: const Text('New schedule'),
+                    label: Text(tr('New schedule')),
                   ),
                 ),
                 if (f.schedules.isEmpty)
@@ -253,7 +254,7 @@ class _TasksScreenState extends State<TasksScreen> {
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
-                            'Run a prompt every few hours, daily, or when a labelled GitHub issue appears.',
+                            tr('Run a prompt every few hours, daily, or when a labelled GitHub issue appears.'),
                             style: text.bodySmall,
                           ),
                         ),
@@ -281,7 +282,7 @@ class _TasksScreenState extends State<TasksScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Schedules run while AndroPI is alive; a persistent notification keeps it running.',
+                        tr('Schedules run while AndroPI is alive; a persistent notification keeps it running.'),
                         style: text.bodySmall?.copyWith(color: p.muted),
                       ),
                     ),
@@ -359,12 +360,12 @@ class _RunCard extends StatelessWidget {
                   ? TextButton.icon(
                       onPressed: onCancel,
                       icon: const Icon(LucideIcons.x, size: 14),
-                      label: const Text('Cancel'),
+                      label: Text(tr('Cancel')),
                     )
                   : TextButton.icon(
                       onPressed: onOpen,
                       icon: const Icon(LucideIcons.messageSquare, size: 14),
-                      label: const Text('Open chat'),
+                      label: Text(tr('Open chat')),
                     ),
             ),
         ],
@@ -411,10 +412,10 @@ class _ScheduleRow extends StatelessWidget {
               'edit' => onTap(),
               _ => onDelete(),
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'run', child: Text('Run now')),
-              PopupMenuItem(value: 'edit', child: Text('Edit')),
-              PopupMenuItem(value: 'delete', child: Text('Delete')),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'run', child: Text(tr('Run now'))),
+              PopupMenuItem(value: 'edit', child: Text(tr('Edit'))),
+              PopupMenuItem(value: 'delete', child: Text(tr('Delete'))),
             ],
           ),
         ],
@@ -533,22 +534,22 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
             TextField(
               controller: _name,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: InputDecoration(labelText: tr('Name')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _prompt,
               minLines: 3,
               maxLines: 8,
-              decoration: const InputDecoration(labelText: 'Prompt', alignLabelWithHint: true),
+              decoration: InputDecoration(labelText: tr('Prompt'), alignLabelWithHint: true),
             ),
             const SizedBox(height: 16),
             SegmentedButton<_Kind>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: _Kind.interval, label: Text('Interval')),
-                ButtonSegment(value: _Kind.daily, label: Text('Daily')),
-                ButtonSegment(value: _Kind.github, label: Text('GitHub trigger')),
+              segments: [
+                ButtonSegment(value: _Kind.interval, label: Text(tr('Interval'))),
+                ButtonSegment(value: _Kind.daily, label: Text(tr('Daily'))),
+                ButtonSegment(value: _Kind.github, label: Text(tr('GitHub trigger'))),
               ],
               selected: {_kind},
               onSelectionChanged: (s) => setState(() {
@@ -563,7 +564,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                   controller: _minutes,
                   keyboardType: TextInputType.number,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'Every (minutes)', helperText: 'At least 15'),
+                  decoration: InputDecoration(labelText: tr('Every (minutes)'), helperText: tr('At least 15')),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -590,7 +591,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                     children: [
                       Icon(LucideIcons.clock, size: 18, color: p.muted),
                       const SizedBox(width: 12),
-                      Expanded(child: Text('Every day at', style: text.bodyMedium)),
+                      Expanded(child: Text(tr('Every day at'), style: text.bodyMedium)),
                       Text(_hhmm(_time), style: text.titleMedium?.copyWith(fontFamily: mono)),
                     ],
                   ),
@@ -601,13 +602,13 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                   controller: _repo,
                   autocorrect: false,
                   style: const TextStyle(fontFamily: mono),
-                  decoration: const InputDecoration(labelText: 'Repository', hintText: 'owner/repo'),
+                  decoration: InputDecoration(labelText: tr('Repository'), hintText: 'owner/repo'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _label,
                   autocorrect: false,
-                  decoration: const InputDecoration(labelText: 'Label', hintText: 'pi'),
+                  decoration: InputDecoration(labelText: tr('Label'), hintText: 'pi'),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -635,7 +636,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
               Text(_problem!, style: text.bodySmall?.copyWith(color: p.danger)),
             ],
             const SizedBox(height: 18),
-            PrimaryButton(label: 'Save', icon: LucideIcons.check, onPressed: _save),
+            PrimaryButton(label: tr('Save'), icon: LucideIcons.check, onPressed: _save),
           ],
         ),
       ),

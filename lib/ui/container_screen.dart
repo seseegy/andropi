@@ -7,6 +7,7 @@ import '../agent/integrations.dart';
 import 'kit.dart';
 import 'task_log.dart';
 import 'terminal_screen.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 class _Distro {
@@ -62,7 +63,7 @@ class _ContainerScreenState extends State<ContainerScreen> {
     final d = _distros.firstWhere((x) => x.id == choice);
     final ok = await runWithLog<bool>(
       context,
-      title: 'Installing ${d.name}',
+      title: '${tr('Installing')} ${d.name}',
       task: (log, _) async {
         await it.installContainer(choice, onLine: log);
         return true;
@@ -87,14 +88,14 @@ class _ContainerScreenState extends State<ContainerScreen> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove the container?'),
-        content: const Text('Everything installed inside it is deleted. Your workspace files are kept.'),
+        title: Text(tr('Remove the container?')),
+        content: Text(tr('Everything installed inside it is deleted. Your workspace files are kept.')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: context.palette.danger, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
+            child: Text(tr('Remove')),
           ),
         ],
       ),
@@ -115,7 +116,7 @@ class _ContainerScreenState extends State<ContainerScreen> {
         final installed = c?.installed == true;
         final d = _distros.firstWhere((x) => x.id == (c?.distro ?? choice), orElse: () => _distros.first);
         return Scaffold(
-          appBar: AppBar(title: const Text('Linux container')),
+          appBar: AppBar(title: Text(tr('Linux container'))),
           body: c == null
               ? const Center(child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)))
               : ListView(
@@ -162,15 +163,17 @@ class _ContainerScreenState extends State<ContainerScreen> {
                           ),
                           const SizedBox(height: 14),
                           Text(
-                            'Runs through proot: no root or Termux needed. Your home folder and workspace are the same '
-                            'paths inside, so the agent can `apt install python3 nodejs` and work on your files directly.',
+                            tr(
+                              'Runs through proot: no root or Termux needed. Your home folder and workspace are the same '
+                              'paths inside, so the agent can `apt install python3 nodejs` and work on your files directly.',
+                            ),
                             style: text.bodySmall,
                           ),
                         ],
                       ),
                     ),
                     if (!installed) ...[
-                      const SectionLabel('Choose a distribution'),
+                      SectionLabel(tr('Choose a distribution')),
                       for (final x in _distros) ...[
                         _DistroCard(distro: x, selected: choice == x.id, onTap: () => setState(() => choice = x.id)),
                         const SizedBox(height: 10),
@@ -183,12 +186,14 @@ class _ContainerScreenState extends State<ContainerScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Downloads the official image from Docker Hub, then installs git, curl, ssh and certificates.',
+                        tr(
+                          'Downloads the official image from Docker Hub, then installs git, curl, ssh and certificates.',
+                        ),
                         textAlign: TextAlign.center,
                         style: text.bodySmall,
                       ),
                     ] else ...[
-                      const SectionLabel('Agent'),
+                      SectionLabel(tr('Agent')),
                       SettingsGroup(
                         children: [
                           SettingsRow(
@@ -205,8 +210,8 @@ class _ContainerScreenState extends State<ContainerScreen> {
                           SettingsRow(
                             icon: LucideIcons.terminal,
                             color: const Color(0xFF22C55E),
-                            title: 'Open a Linux shell',
-                            subtitle: 'Terminal inside the container',
+                            title: tr('Open a Linux shell'),
+                            subtitle: tr('Terminal inside the container'),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => TerminalScreen(agent: widget.agent, command: 'box'),
@@ -215,7 +220,7 @@ class _ContainerScreenState extends State<ContainerScreen> {
                           ),
                         ],
                       ),
-                      const SectionLabel('Try'),
+                      SectionLabel(tr('Try')),
                       SurfaceCard(
                         padding: const EdgeInsets.all(14),
                         child: SelectableText(
@@ -225,14 +230,14 @@ class _ContainerScreenState extends State<ContainerScreen> {
                           style: TextStyle(fontFamily: mono, fontSize: 12.5, height: 1.6, color: p.text),
                         ),
                       ),
-                      const SectionLabel('Manage'),
+                      SectionLabel(tr('Manage')),
                       SettingsGroup(
                         children: [
                           SettingsRow(
                             icon: LucideIcons.trash2,
                             color: p.danger,
-                            title: 'Remove container',
-                            subtitle: 'Frees the space; workspace files stay',
+                            title: tr('Remove container'),
+                            subtitle: tr('Frees the space; workspace files stay'),
                             destructive: true,
                             onTap: widget.agent.busy ? null : _remove,
                           ),

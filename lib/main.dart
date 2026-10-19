@@ -5,6 +5,7 @@ import 'agent/agent_controller.dart';
 import 'ui/app_lock.dart';
 import 'ui/home_shell.dart';
 import 'ui/onboarding.dart';
+import 'ui/i18n.dart';
 import 'ui/kit.dart';
 import 'ui/theme.dart';
 
@@ -24,7 +25,7 @@ class AndroPiApp extends StatelessWidget {
     return ListenableBuilder(
       listenable: appearance,
       builder: (context, _) => MaterialApp(
-        title: 'AndroPI',
+        title: tr('AndroPI'),
         debugShowCheckedModeBanner: false,
         themeMode: appearance.value,
         theme: buildTheme(Brightness.light),
@@ -67,7 +68,7 @@ class _Boot extends StatelessWidget {
             const SizedBox(height: 20),
             SizedBox(width: 120, child: LinearProgressIndicator(minHeight: 2, borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 14),
-            Text('Starting agent', style: Theme.of(context).textTheme.bodySmall),
+            Text(tr('Starting agent'), style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),
@@ -91,9 +92,9 @@ class _BootFailed extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 32),
-              Text('The agent could not start', style: text.headlineSmall),
+              Text(tr('The agent could not start'), style: text.headlineSmall),
               const SizedBox(height: 8),
-              Text('Details from the runtime are below.', style: text.bodyMedium?.copyWith(color: p.muted)),
+              Text(tr('Details from the runtime are below.'), style: text.bodyMedium?.copyWith(color: p.muted)),
               const SizedBox(height: 20),
               Expanded(
                 child: Container(
@@ -112,7 +113,7 @@ class _BootFailed extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              FilledButton(onPressed: agent.boot, child: const Text('Try again')),
+              FilledButton(onPressed: agent.boot, child: Text(tr('Try again'))),
             ],
           ),
         ),

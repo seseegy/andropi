@@ -63,6 +63,8 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_info"/>
         </receiver>
+        <!-- "Stop" on the agent's ongoing notification. -->
+        <receiver android:name=".StopReceiver" android:exported="false"/>
         <!-- Exported so the system download service can reach it; it only re-reads the download's status. -->
         <receiver android:name=".UpdateReceiver" android:exported="true">
             <intent-filter>

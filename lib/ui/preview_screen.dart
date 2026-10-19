@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Renders HTML in a WebView. With [live], it re-renders as the source grows,
@@ -126,7 +127,7 @@ class _HtmlPreviewScreenState extends State<HtmlPreviewScreen> {
                       decoration: BoxDecoration(color: p.success, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 5),
-                    Text('Live', style: TextStyle(fontSize: 11, color: p.success)),
+                    Text(tr('Live'), style: TextStyle(fontSize: 11, color: p.success)),
                   ],
                 ),
               ),
@@ -135,7 +136,7 @@ class _HtmlPreviewScreenState extends State<HtmlPreviewScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Reload',
+            tooltip: tr('Reload'),
             icon: const Icon(LucideIcons.refreshCw, size: 20),
             onPressed: () => _reload(force: true),
           ),

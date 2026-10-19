@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../agent/agent_controller.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// The last path segment, for showing a folder by name.
@@ -100,7 +101,7 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('New folder'),
+        title: Text(tr('New folder')),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -108,8 +109,8 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Create')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(tr('Create'))),
         ],
       ),
     );
@@ -120,7 +121,9 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
       final dir = Directory('$path/$clean')..createSync(recursive: true);
       setState(() => path = dir.path);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create it: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Could not create it')}: $e')));
+      }
     }
   }
 
@@ -134,7 +137,7 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Choose a folder'),
+        title: Text(tr('Choose a folder')),
         actions: [
           IconButton(
             tooltip: showHidden ? 'Hide hidden folders' : 'Show hidden folders',
@@ -143,7 +146,7 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
           ),
           if (!locked)
             IconButton(
-              tooltip: 'New folder',
+              tooltip: tr('New folder'),
               icon: const Icon(LucideIcons.folderPlus, size: 20),
               onPressed: _newFolder,
             ),
@@ -156,8 +159,10 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                'Projects live in the AndroPI workspace. To bring in files from your phone, open a project and use '
-                'Files → Import from phone.',
+                tr(
+                  'Projects live in the AndroPI workspace. To bring in files from your phone, open a project and use '
+                  'Files → Import from phone.',
+                ),
                 style: text.bodySmall,
               ),
             )
@@ -166,16 +171,16 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
               child: SegmentedButton<_Root>(
                 showSelectedIcon: false,
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: _Root.workspace,
                     icon: Icon(LucideIcons.boxes, size: 16),
-                    label: Text('Workspace'),
+                    label: Text(tr('Workspace')),
                   ),
                   ButtonSegment(
                     value: _Root.phone,
                     icon: Icon(LucideIcons.smartphone, size: 16),
-                    label: Text('Phone storage'),
+                    label: Text(tr('Phone storage')),
                   ),
                 ],
                 selected: {root},
@@ -219,16 +224,18 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
                           children: [
                             const IconTile(icon: LucideIcons.folderLock, color: Color(0xFFF59E0B), size: 44),
                             const SizedBox(height: 14),
-                            Text('Allow file access', style: text.titleMedium),
+                            Text(tr('Allow file access'), style: text.titleMedium),
                             const SizedBox(height: 6),
                             Text(
-                              'To work in Download, Documents or any other folder on your phone, AndroPI needs '
-                              '"All files access". Turn it on for AndroPI on the next screen, then come back.',
+                              tr(
+                                'To work in Download, Documents or any other folder on your phone, AndroPI needs '
+                                '"All files access". Turn it on for AndroPI on the next screen, then come back.',
+                              ),
                               style: text.bodySmall,
                             ),
                             const SizedBox(height: 16),
                             PrimaryButton(
-                              label: 'Allow access',
+                              label: tr('Allow access'),
                               icon: LucideIcons.shieldCheck,
                               onPressed: widget.agent.client.requestStorageAccess,
                             ),
@@ -238,7 +245,7 @@ class _FolderPickerState extends State<FolderPicker> with WidgetsBindingObserver
                     ],
                   )
                 : children.isEmpty
-                ? Center(child: Text('No folders here', style: text.bodySmall))
+                ? Center(child: Text(tr('No folders here'), style: text.bodySmall))
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
                     itemCount: children.length,

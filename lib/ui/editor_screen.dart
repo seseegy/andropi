@@ -40,6 +40,7 @@ import 'package:re_highlight/re_highlight.dart' show Mode;
 import '../agent/agent_controller.dart';
 import 'illustration.dart';
 import 'preview_screen.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Files bigger than this open read-only: the editor keeps every line in memory and re-highlights on edits.
@@ -161,7 +162,7 @@ class _EditorScreenState extends State<EditorScreen> {
       });
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Saved'), duration: Duration(seconds: 1)));
+        ..showSnackBar(SnackBar(content: Text(tr('Saved')), duration: Duration(seconds: 1)));
       return true;
     } catch (e) {
       if (!mounted) return false;
@@ -175,12 +176,12 @@ class _EditorScreenState extends State<EditorScreen> {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Unsaved changes'),
-        content: Text('Save changes to $_name before leaving?'),
+        title: Text(tr('Unsaved changes')),
+        content: Text('${tr('Save changes before leaving?')} ($_name)'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'discard'), child: const Text('Discard')),
-          TextButton(onPressed: () => Navigator.pop(ctx, 'save'), child: const Text('Save')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'discard'), child: Text(tr('Discard'))),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(tr('Save'))),
         ],
       ),
     );
@@ -209,7 +210,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _copyAll() async {
     await Clipboard.setData(ClipboardData(text: _controller.text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Copied'))));
   }
 
   @override
@@ -268,21 +269,21 @@ class _EditorScreenState extends State<EditorScreen> {
             actions: [
               if (ready && !_readOnly) ...[
                 IconButton(
-                  tooltip: 'Undo',
+                  tooltip: tr('Undo'),
                   icon: const Icon(LucideIcons.undo2, size: 20),
                   onPressed: _canUndo ? _controller.undo : null,
                 ),
                 IconButton(
-                  tooltip: 'Redo',
+                  tooltip: tr('Redo'),
                   icon: const Icon(LucideIcons.redo2, size: 20),
                   onPressed: _canRedo ? _controller.redo : null,
                 ),
               ],
               if (ready)
-                IconButton(tooltip: 'Find', icon: const Icon(LucideIcons.search, size: 20), onPressed: _toggleFind),
+                IconButton(tooltip: tr('Find'), icon: const Icon(LucideIcons.search, size: 20), onPressed: _toggleFind),
               if (ready && !_readOnly)
                 IconButton(
-                  tooltip: 'Save',
+                  tooltip: tr('Save'),
                   icon: _saving
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : Icon(LucideIcons.save, size: 20, color: _dirty ? p.accent : null),
@@ -296,8 +297,8 @@ class _EditorScreenState extends State<EditorScreen> {
                     if (v == 'copy') _copyAll();
                   },
                   itemBuilder: (_) => [
-                    if (_previewable) const PopupMenuItem(value: 'preview', child: Text('Preview')),
-                    const PopupMenuItem(value: 'copy', child: Text('Copy all')),
+                    if (_previewable) PopupMenuItem(value: 'preview', child: Text(tr('Preview'))),
+                    PopupMenuItem(value: 'copy', child: Text(tr('Copy all'))),
                   ],
                 ),
               const SizedBox(width: 4),
@@ -340,7 +341,7 @@ class _EditorScreenState extends State<EditorScreen> {
             children: [
               const Illustration('projects', height: 150),
               const SizedBox(height: 16),
-              Text('Binary file', style: t.titleMedium),
+              Text(tr('Binary file'), style: t.titleMedium),
               const SizedBox(height: 4),
               Text('${_formatSize(_size)} · can\'t be shown as text', style: t.bodySmall?.copyWith(color: p.muted)),
             ],

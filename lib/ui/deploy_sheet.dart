@@ -7,6 +7,7 @@ import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import 'accounts_screen.dart';
 import 'task_log.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 enum DeployTarget { vercel, githubPages, ssh }
@@ -42,7 +43,7 @@ Future<void> showDeploySheet(BuildContext context, AgentController agent) async 
   if (request == null || !context.mounted) return;
   await runWithLog<String?>(
     context,
-    title: 'Deploying to ${request.target.label}',
+    title: '${tr('Deploying to')} ${request.target.label}',
     openUrl: agent.client.openUrl,
     task: (log, ci) => agent.integrations.deploy(
       target: request.target.id,
@@ -142,7 +143,7 @@ class _DeploySheetState extends State<_DeploySheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Deploy', style: text.titleLarge),
+              Text(tr('Deploy'), style: text.titleLarge),
               const SizedBox(height: 4),
               Text(
                 widget.agent.cwd.replaceFirst(RegExp(r'^.*/workspace/?'), 'workspace/'),
@@ -177,7 +178,7 @@ class _DeploySheetState extends State<_DeploySheet> {
                       });
                     }
                   },
-                  child: const Text('Open accounts & servers'),
+                  child: Text(tr('Open accounts & servers')),
                 ),
               ] else ...[
                 field(folder, 'Folder to deploy', hint: '.  (or dist, build, public…)'),
@@ -186,8 +187,8 @@ class _DeploySheetState extends State<_DeploySheet> {
                     field(name, 'Project name'),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Production'),
-                      subtitle: const Text('Off creates a preview deployment'),
+                      title: Text(tr('Production')),
+                      subtitle: Text(tr('Off creates a preview deployment')),
                       value: production,
                       onChanged: (v) => setState(() => production = v),
                     ),
@@ -196,13 +197,13 @@ class _DeploySheetState extends State<_DeploySheet> {
                     if (slug != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: Text('Publishes github.com/$slug', style: text.bodySmall),
+                        child: Text('${tr('Publishes')} github.com/$slug', style: text.bodySmall),
                       )
                     else
                       field(name, 'New repository name', helper: 'Created under your account, public'),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Commit changes first'),
+                      title: Text(tr('Commit changes first')),
                       value: commit,
                       onChanged: (v) => setState(() => commit = v),
                     ),
@@ -211,7 +212,7 @@ class _DeploySheetState extends State<_DeploySheet> {
                   DeployTarget.ssh => [
                     DropdownButtonFormField<String>(
                       initialValue: hostId,
-                      decoration: const InputDecoration(labelText: 'Server'),
+                      decoration: InputDecoration(labelText: tr('Server')),
                       items: [
                         for (final h in it.hosts)
                           DropdownMenuItem(value: h.id, child: Text('${h.name}  ·  ${h.address}')),
@@ -230,7 +231,7 @@ class _DeploySheetState extends State<_DeploySheet> {
                 FilledButton.icon(
                   onPressed: _submit,
                   icon: const Icon(LucideIcons.rocket, size: 18),
-                  label: Text('Deploy to ${target.label}'),
+                  label: Text('${tr('Deploy to')} ${target.label}'),
                 ),
               ],
             ],
@@ -266,12 +267,12 @@ class _Result extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Copy',
+            tooltip: tr('Copy'),
             icon: const Icon(LucideIcons.copy, size: 16),
             onPressed: () => Clipboard.setData(ClipboardData(text: url)),
           ),
           IconButton(
-            tooltip: 'Open',
+            tooltip: tr('Open'),
             icon: const Icon(LucideIcons.externalLink, size: 16),
             onPressed: () => openUrl(url),
           ),

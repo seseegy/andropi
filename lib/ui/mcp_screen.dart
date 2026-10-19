@@ -5,6 +5,7 @@ import '../agent/agent_controller.dart';
 import '../agent/features.dart';
 import 'illustration.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// A starting point for a common MCP server.
@@ -71,11 +72,11 @@ class _McpScreenState extends State<McpScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove server?'),
+        title: Text(tr('Remove server?')),
         content: Text('"${s.name}" and its tools will be removed from pi.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Remove'))),
         ],
       ),
     );
@@ -97,8 +98,10 @@ class _McpScreenState extends State<McpScreen> {
         final servers = f.mcpServers;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('MCP servers'),
-            actions: [IconButton(tooltip: 'Add server', onPressed: () => _edit(), icon: const Icon(LucideIcons.plus))],
+            title: Text(tr('MCP servers')),
+            actions: [
+              IconButton(tooltip: tr('Add server'), onPressed: () => _edit(), icon: const Icon(LucideIcons.plus)),
+            ],
           ),
           body: RefreshIndicator(
             onRefresh: () => f.refreshMcp().catchError((Object e) => _error(e)),
@@ -113,13 +116,15 @@ class _McpScreenState extends State<McpScreen> {
                         children: [
                           IconTile(icon: LucideIcons.plug, color: p.accent),
                           const SizedBox(width: 12),
-                          Expanded(child: Text('Model Context Protocol', style: text.titleMedium)),
+                          Expanded(child: Text(tr('Model Context Protocol'), style: text.titleMedium)),
                         ],
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Connect pi to databases, docs, browsers and more through Model Context Protocol servers; '
-                        'their tools show up as mcp_<server>_<tool>.',
+                        tr(
+                          'Connect pi to databases, docs, browsers and more through Model Context Protocol servers; '
+                          'their tools show up as mcp_<server>_<tool>.',
+                        ),
                         style: text.bodyMedium?.copyWith(color: p.muted),
                       ),
                       const SizedBox(height: 14),
@@ -139,11 +144,11 @@ class _McpScreenState extends State<McpScreen> {
                   ),
                 ),
                 SectionLabel(
-                  'Servers',
+                  tr('Servers'),
                   trailing: TextButton.icon(
                     onPressed: () => _edit(),
                     icon: const Icon(LucideIcons.plus, size: 14),
-                    label: const Text('Add server'),
+                    label: Text(tr('Add server')),
                   ),
                 ),
                 if (servers.isEmpty)
@@ -152,7 +157,7 @@ class _McpScreenState extends State<McpScreen> {
                       children: [
                         const Illustration('connect', height: 140),
                         const SizedBox(height: 8),
-                        Text('No servers yet. Pick a preset above to start.', style: text.bodySmall),
+                        Text(tr('No servers yet. Pick a preset above to start.'), style: text.bodySmall),
                       ],
                     ),
                   )
@@ -249,9 +254,9 @@ class _ServerCard extends StatelessWidget {
               PopupMenuButton<String>(
                 icon: Icon(LucideIcons.ellipsis, size: 18, color: p.muted),
                 onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem(value: 'delete', child: Text('Remove')),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'edit', child: Text(tr('Edit'))),
+                  PopupMenuItem(value: 'delete', child: Text(tr('Remove'))),
                 ],
               ),
             ],
@@ -436,7 +441,7 @@ class _McpSheetState extends State<_McpSheet> {
             TextButton.icon(
               onPressed: () => setState(() => pairs.add(_Pair('', ''))),
               icon: const Icon(LucideIcons.plus, size: 14),
-              label: const Text('Add'),
+              label: Text(tr('Add')),
             ),
           ],
         ),
@@ -497,13 +502,17 @@ class _McpSheetState extends State<_McpSheet> {
             TextField(
               controller: _name,
               autocorrect: false,
-              decoration: const InputDecoration(labelText: 'Name', hintText: 'memory'),
+              decoration: InputDecoration(labelText: tr('Name'), hintText: 'memory'),
             ),
             const SizedBox(height: 14),
             SegmentedButton<String>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: 'stdio', label: Text('Command'), icon: Icon(LucideIcons.squareTerminal, size: 16)),
+              segments: [
+                ButtonSegment(
+                  value: 'stdio',
+                  label: Text(tr('Command')),
+                  icon: Icon(LucideIcons.squareTerminal, size: 16),
+                ),
                 ButtonSegment(value: 'http', label: Text('HTTP'), icon: Icon(LucideIcons.globe, size: 16)),
               ],
               selected: {_type},
@@ -520,8 +529,8 @@ class _McpSheetState extends State<_McpSheet> {
                 minLines: 1,
                 maxLines: 3,
                 style: const TextStyle(fontFamily: mono, fontSize: 13),
-                decoration: const InputDecoration(
-                  labelText: 'Command line',
+                decoration: InputDecoration(
+                  labelText: tr('Command line'),
                   hintText: 'npx -y @modelcontextprotocol/server-memory',
                 ),
               ),
@@ -530,10 +539,10 @@ class _McpSheetState extends State<_McpSheet> {
                 contentPadding: EdgeInsets.zero,
                 value: _inContainer,
                 onChanged: (v) => setState(() => _inContainer = v),
-                title: Text('Run inside the Linux container (needed for npx/uvx)', style: text.bodyMedium),
+                title: Text(tr('Run inside the Linux container (needed for npx/uvx)'), style: text.bodyMedium),
               ),
               const SizedBox(height: 6),
-              _pairsEditor(_env, title: 'Environment variables', keyHint: 'API_KEY', valueHint: 'value'),
+              _pairsEditor(_env, title: tr('Environment variables'), keyHint: 'API_KEY', valueHint: 'value'),
             ] else ...[
               TextField(
                 controller: _url,
@@ -543,21 +552,21 @@ class _McpSheetState extends State<_McpSheet> {
                 decoration: const InputDecoration(labelText: 'URL', hintText: 'https://example.com/mcp'),
               ),
               const SizedBox(height: 14),
-              _pairsEditor(_headers, title: 'Headers', keyHint: 'Authorization', valueHint: 'Bearer …'),
+              _pairsEditor(_headers, title: tr('Headers'), keyHint: 'Authorization', valueHint: 'Bearer …'),
             ],
             const SizedBox(height: 6),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _enabled,
               onChanged: (v) => setState(() => _enabled = v),
-              title: Text('Enabled', style: text.bodyMedium),
+              title: Text(tr('Enabled'), style: text.bodyMedium),
             ),
             if (_problem != null) ...[
               const SizedBox(height: 6),
               Text(_problem!, style: text.bodySmall?.copyWith(color: p.danger)),
             ],
             const SizedBox(height: 16),
-            PrimaryButton(label: 'Save', icon: LucideIcons.check, onPressed: _save),
+            PrimaryButton(label: tr('Save'), icon: LucideIcons.check, onPressed: _save),
           ],
         ),
       ),

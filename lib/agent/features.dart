@@ -269,7 +269,8 @@ class Features extends ChangeNotifier {
         mcpServers = _l(r['servers']).map(McpServer.new).toList();
         notifyListeners();
       case 'agent_done':
-        done.add(r['preview'] as String? ?? '');
+        // A fallback model taking over the failed turn: not done yet.
+        if (r['retrying'] != true) done.add(r['preview'] as String? ?? '');
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:simple_icons/simple_icons.dart';
 import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// DNS-over-HTTPS and the agent's web search.
@@ -55,7 +56,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
         final s = it.settings;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Web & DNS'),
+            title: Text(tr('Web & DNS')),
             actions: [
               if (saving)
                 const Padding(
@@ -71,8 +72,10 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   children: [
                     const SectionLabel('DNS', padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
                     Text(
-                      'Some networks block sites by answering DNS with a block page. DNS-over-HTTPS sends lookups '
-                      'encrypted, so search, model APIs and downloads reach the real servers.',
+                      tr(
+                        'Some networks block sites by answering DNS with a block page. DNS-over-HTTPS sends lookups '
+                        'encrypted, so search, model APIs and downloads reach the real servers.',
+                      ),
                       style: text.bodySmall,
                     ),
                     const SizedBox(height: 12),
@@ -81,7 +84,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                         _DnsOption(
                           icon: SimpleIcons.cloudflare,
                           color: const Color(0xFFF38020),
-                          title: 'Cloudflare',
+                          title: tr('Cloudflare'),
                           subtitle: '1.1.1.1 over HTTPS · recommended',
                           selected: s.dns == 'cloudflare',
                           onTap: () => _save({'dns': 'cloudflare'}),
@@ -89,7 +92,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                         _DnsOption(
                           icon: SimpleIcons.google,
                           color: const Color(0xFF4285F4),
-                          title: 'Google',
+                          title: tr('Google'),
                           subtitle: '8.8.8.8 over HTTPS',
                           selected: s.dns == 'google',
                           onTap: () => _save({'dns': 'google'}),
@@ -97,16 +100,16 @@ class _NetworkScreenState extends State<NetworkScreen> {
                         _DnsOption(
                           icon: LucideIcons.link,
                           color: p.accent,
-                          title: 'Custom DoH',
-                          subtitle: 'Any JSON DNS-over-HTTPS endpoint',
+                          title: tr('Custom DoH'),
+                          subtitle: tr('Any JSON DNS-over-HTTPS endpoint'),
                           selected: s.dns == 'custom',
                           onTap: () => _save({'dns': 'custom', 'dnsUrl': customUrl.text}),
                         ),
                         _DnsOption(
                           icon: LucideIcons.smartphone,
                           color: p.muted,
-                          title: 'System',
-                          subtitle: 'Whatever the phone and network use',
+                          title: tr('System'),
+                          subtitle: tr('Whatever the phone and network use'),
                           selected: s.dns == 'system',
                           onTap: () => _save({'dns': 'system'}),
                         ),
@@ -119,8 +122,8 @@ class _NetworkScreenState extends State<NetworkScreen> {
                         autocorrect: false,
                         keyboardType: TextInputType.url,
                         style: const TextStyle(fontFamily: mono, fontSize: 13.5),
-                        decoration: const InputDecoration(
-                          labelText: 'DoH URL',
+                        decoration: InputDecoration(
+                          labelText: tr('DoH URL'),
                           hintText: 'https://dns.example/dns-query',
                         ),
                         onSubmitted: (v) => _save({'dns': 'custom', 'dnsUrl': v}, done: 'DNS updated'),
@@ -128,10 +131,12 @@ class _NetworkScreenState extends State<NetworkScreen> {
                     ],
                     const SizedBox(height: 10),
                     Text(
-                      'Applies to the agent, web search, accounts and deploys. The Linux container uses the same provider.',
+                      tr(
+                        'Applies to the agent, web search, accounts and deploys. The Linux container uses the same provider.',
+                      ),
                       style: text.bodySmall,
                     ),
-                    const SectionLabel('Web search'),
+                    SectionLabel(tr('Web search')),
                     SurfaceCard(
                       child: Row(
                         children: [
@@ -141,10 +146,10 @@ class _NetworkScreenState extends State<NetworkScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Built in, no key needed', style: text.titleSmall),
+                                Text(tr('Built in, no key needed'), style: text.titleSmall),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'The agent has web_search and web_fetch tools (DuckDuckGo, then Brave).',
+                                  tr('The agent has web_search and web_fetch tools (DuckDuckGo, then Brave).'),
                                   style: text.bodySmall,
                                 ),
                               ],
@@ -154,12 +159,12 @@ class _NetworkScreenState extends State<NetworkScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text('Optional API keys give faster, more reliable results:', style: text.bodySmall),
+                    Text(tr('Optional API keys give faster, more reliable results:'), style: text.bodySmall),
                     const SizedBox(height: 10),
                     _KeyField(
                       icon: SimpleIcons.brave,
                       color: const Color(0xFFFB542B),
-                      title: 'Brave Search API',
+                      title: tr('Brave Search API'),
                       saved: s.hasBraveKey,
                       onSave: (v) => _save({'braveKey': v}, done: v.isEmpty ? 'Key removed' : 'Brave key saved'),
                       onLink: () => widget.agent.client.openUrl('https://brave.com/search/api/'),
@@ -168,7 +173,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                     _KeyField(
                       icon: LucideIcons.telescope,
                       color: const Color(0xFF0EA5E9),
-                      title: 'Tavily',
+                      title: tr('Tavily'),
                       saved: s.hasTavilyKey,
                       onSave: (v) => _save({'tavilyKey': v}, done: v.isEmpty ? 'Key removed' : 'Tavily key saved'),
                       onLink: () => widget.agent.client.openUrl('https://app.tavily.com'),
@@ -265,15 +270,15 @@ class _KeyFieldState extends State<_KeyField> {
               const SizedBox(width: 12),
               Expanded(child: Text(widget.title, style: text.titleSmall)),
               if (widget.saved) ...[
-                Pill('Saved', color: p.success, dot: true),
+                Pill(tr('Saved'), color: p.success, dot: true),
                 IconButton(
-                  tooltip: 'Remove key',
+                  tooltip: tr('Remove key'),
                   icon: const Icon(LucideIcons.trash2, size: 16),
                   onPressed: () => widget.onSave(''),
                 ),
               ] else
                 IconButton(
-                  tooltip: 'Get a key',
+                  tooltip: tr('Get a key'),
                   icon: const Icon(LucideIcons.externalLink, size: 16),
                   onPressed: widget.onLink,
                 ),
@@ -289,7 +294,7 @@ class _KeyFieldState extends State<_KeyField> {
                     obscureText: true,
                     autocorrect: false,
                     enableSuggestions: false,
-                    decoration: const InputDecoration(hintText: 'API key'),
+                    decoration: InputDecoration(hintText: tr('API key')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -299,7 +304,7 @@ class _KeyFieldState extends State<_KeyField> {
                     await widget.onSave(key.text.trim());
                     key.clear();
                   },
-                  child: const Text('Save'),
+                  child: Text(tr('Save')),
                 ),
               ],
             ),

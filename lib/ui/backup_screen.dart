@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../agent/agent_controller.dart';
 import 'code_view.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Back up and restore sessions, skills, templates and settings as a zip.
@@ -72,14 +73,14 @@ class _BackupScreenState extends State<BackupScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Restore backup?'),
+        title: Text(tr('Restore backup?')),
         content: const Text(
           'Sessions, skills, templates and settings are overwritten with the backup\'s copies. '
           'This cannot be undone.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restore')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Restore'))),
         ],
       ),
     );
@@ -101,11 +102,11 @@ class _BackupScreenState extends State<BackupScreen> {
     final text = Theme.of(context).textTheme;
     final r = _result;
     return Scaffold(
-      appBar: AppBar(title: const Text('Backup & restore')),
+      appBar: AppBar(title: Text(tr('Backup & restore'))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
-          const SectionLabel('Back up', padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
+          SectionLabel(tr('Back up'), padding: EdgeInsets.fromLTRB(4, 8, 4, 10)),
           SurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,7 +117,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Sessions, skills, templates, schedules and settings in one zip.',
+                        tr('Sessions, skills, templates, schedules and settings in one zip.'),
                         style: text.bodyMedium,
                       ),
                     ),
@@ -127,11 +128,16 @@ class _BackupScreenState extends State<BackupScreen> {
                   contentPadding: EdgeInsets.zero,
                   value: _includeWorkspace,
                   onChanged: _backingUp ? null : (v) => setState(() => _includeWorkspace = v),
-                  title: Text('Include workspace files', style: text.titleSmall),
-                  subtitle: Text('Your project folders too; the zip can get large.', style: text.bodySmall),
+                  title: Text(tr('Include workspace files'), style: text.titleSmall),
+                  subtitle: Text(tr('Your project folders too; the zip can get large.'), style: text.bodySmall),
                 ),
                 const SizedBox(height: 8),
-                PrimaryButton(label: 'Create backup', icon: LucideIcons.download, busy: _backingUp, onPressed: _backup),
+                PrimaryButton(
+                  label: tr('Create backup'),
+                  icon: LucideIcons.download,
+                  busy: _backingUp,
+                  onPressed: _backup,
+                ),
                 if (r != null) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -162,13 +168,13 @@ class _BackupScreenState extends State<BackupScreen> {
                   children: [
                     Icon(LucideIcons.keyRound, size: 14, color: p.muted),
                     const SizedBox(width: 6),
-                    Expanded(child: Text('Provider keys and tokens are not included.', style: text.bodySmall)),
+                    Expanded(child: Text(tr('Provider keys and tokens are not included.'), style: text.bodySmall)),
                   ],
                 ),
               ],
             ),
           ),
-          const SectionLabel('Restore'),
+          SectionLabel(tr('Restore')),
           SurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -179,7 +185,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Enter the path of a backup zip, or choose one from your phone.',
+                        tr('Enter the path of a backup zip, or choose one from your phone.'),
                         style: text.bodyMedium,
                       ),
                     ),
@@ -191,7 +197,7 @@ class _BackupScreenState extends State<BackupScreen> {
                   autocorrect: false,
                   onChanged: (_) => setState(() {}),
                   style: const TextStyle(fontFamily: mono, fontSize: 13),
-                  decoration: const InputDecoration(labelText: 'Backup file', hintText: '/…/andropi-backup.zip'),
+                  decoration: InputDecoration(labelText: tr('Backup file'), hintText: '/…/andropi-backup.zip'),
                 ),
                 const SizedBox(height: 10),
                 Align(
@@ -199,12 +205,12 @@ class _BackupScreenState extends State<BackupScreen> {
                   child: TextButton.icon(
                     onPressed: _restoring ? null : _choose,
                     icon: const Icon(LucideIcons.folderOpen, size: 16),
-                    label: const Text('Choose file'),
+                    label: Text(tr('Choose file')),
                   ),
                 ),
                 const SizedBox(height: 8),
                 PrimaryButton(
-                  label: 'Restore',
+                  label: tr('Restore'),
                   icon: LucideIcons.rotateCcw,
                   busy: _restoring,
                   onPressed: _path.text.trim().isEmpty ? null : _restore,

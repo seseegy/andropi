@@ -55,6 +55,9 @@ class AgentController extends ChangeNotifier {
 
   bool get hasModel => model != null;
 
+  /// The tool the agent is running right now, for the ongoing notification.
+  String? runningTool;
+
   // -------------------------------------------------------------------------
   // Lifecycle
 
@@ -121,7 +124,32 @@ class AgentController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteSession(String path) => client.call('delete_session', {'path': path});
+  /// Deletes chats. If the open chat is among them, a fresh chat in the same folder takes its place.
+  Future<int> deleteSessions(List<String> paths) async {
+    final r = await client.call<Map<String, dynamic>>('delete_sessions', {'paths': paths});
+    await _afterSwitch(r);
+    return r['deleted'] as int? ?? 0;
+  }
+
+  /// What deleting a project would lose (uncommitted work, unpushed commits, chats) and what blocks it.
+  Future<ProjectDeleteCheck> projectDeleteCheck(String path) async =>
+      ProjectDeleteCheck(await client.call<Map<String, dynamic>>('project_delete_check', {'path': path}));
+
+  /// Deletes a workspace project folder, and its chats when [deleteChats]. Returns how many chats went.
+  Future<int> deleteProject(String path, {required bool deleteChats}) async {
+    final r = await client.call<Map<String, dynamic>>('delete_project', {'path': path, 'deleteChats': deleteChats});
+    await _afterSwitch(r);
+    await integrations.refreshProjects();
+    return r['deletedChats'] as int? ?? 0;
+  }
+
+  /// Applies host state after a delete; the transcript reloads when the open chat was replaced.
+  Future<void> _afterSwitch(Map<String, dynamic> state) async {
+    final before = sessionId;
+    _applyState(state);
+    if (sessionId != before) await loadHistory();
+    notifyListeners();
+  }
 
   Future<List<SessionSummary>> listSessions() async {
     final list = await client.call<List>('sessions');
@@ -179,6 +207,35 @@ class AgentController extends ChangeNotifier {
     } on AgentError catch (e) {
       _addNotice(e.message, error: true);
     }
+  }
+
+  /// Tries the last failed request again (on the current model, which may have been changed since).
+  Future<void> retry() async {
+    try {
+      await client.call('retry');
+    } on AgentError catch (e) {
+      _addNotice(e.message, error: true);
+    }
+  }
+
+  /// Whether the transcript ends in an error the user could retry.
+  bool get endsInError => !busy && lastTurnError != null;
+
+  /// The error the transcript ends in, if any (also while the run is still winding down).
+  String? get lastTurnError {
+    if (entries.isEmpty) return null;
+    final last = entries.last;
+    if (last is AssistantEntry && last.error != null && !last.aborted) return last.error;
+    if (last is NoticeEntry && last.error) return last.text;
+    return null;
+  }
+
+  /// A short name for the open chat: its name, else its first message.
+  String get chatTitle {
+    final name = sessionName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final first = entries.whereType<UserEntry>().firstOrNull?.text.trim().split('\n').first ?? '';
+    return first.length > 48 ? '${first.substring(0, 47)}…' : (first.isEmpty ? 'AndroPI' : first);
   }
 
   /// Rewinds to just before a user message; returns its text for editing.
@@ -298,6 +355,7 @@ class AgentController extends ChangeNotifier {
         _setBusy(true);
       case 'agent_settled':
         _setBusy(false);
+        runningTool = null;
         _streaming = null;
         _refreshStateQuietly();
       case 'message_start':
@@ -312,6 +370,7 @@ class AgentController extends ChangeNotifier {
         }
       case 'tool_execution_start':
         tools[e['toolCallId'] as String] = ToolRun(e['toolCallId'] as String);
+        runningTool = e['toolName'] as String?;
       case 'tool_execution_update':
         final run = tools.putIfAbsent(e['toolCallId'] as String, () => ToolRun(e['toolCallId'] as String));
         run.output = contentText((e['partialResult'] as Map?)?['content']);
@@ -319,6 +378,7 @@ class AgentController extends ChangeNotifier {
         final run = tools.putIfAbsent(e['toolCallId'] as String, () => ToolRun(e['toolCallId'] as String));
         run.output = contentText((e['result'] as Map?)?['content']);
         run.status = e['isError'] == true ? ToolStatus.failed : ToolStatus.done;
+        runningTool = null;
       case 'compaction_start':
         _addNotice('Compacting context…');
       case 'session_info_changed':

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../agent/agent_controller.dart';
 import 'kit.dart';
 import 'illustration.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// First-run welcome: what AndroPI is, then straight to connecting a model.
@@ -50,9 +51,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: _start,
-                          child: const Padding(
+                          child: Padding(
                             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                            child: Text('Skip', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                            child: Text(tr('Skip'), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
                           ),
                         ),
                       ),

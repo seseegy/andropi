@@ -10,6 +10,7 @@ import '../agent/integrations.dart';
 import 'kit.dart';
 import 'message_views.dart';
 import 'task_log.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Curated places to browse skills from.
@@ -82,7 +83,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
     try {
       await it.installSkill(hit.spec);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Installed ${hit.name}')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Installed')}: ${hit.name}')));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -99,7 +100,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
     FocusScope.of(context).unfocus();
     final added = await runWithLog<List<SkillInfo>>(
       context,
-      title: 'Installing skill',
+      title: tr('Installing skill'),
       task: (log, _) => it.installSkill(source, onLine: log),
     );
     if (added != null) {
@@ -140,7 +141,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
                   onPressed: () => Navigator.pop(context, true),
                   style: TextButton.styleFrom(foregroundColor: context.palette.danger),
                   icon: const Icon(LucideIcons.trash2, size: 16),
-                  label: const Text('Remove'),
+                  label: Text(tr('Remove')),
                 ),
               ],
             ),
@@ -167,13 +168,13 @@ class _SkillsScreenState extends State<SkillsScreen> {
     final text = Theme.of(context).textTheme;
     final searching = results != null;
     return Scaffold(
-      appBar: widget.embedded ? null : AppBar(title: const Text('Skills')),
+      appBar: widget.embedded ? null : AppBar(title: Text(tr('Skills'))),
       body: ListView(
         padding: widget.embedded
             ? EdgeInsets.fromLTRB(20, MediaQuery.paddingOf(context).top + 12, 20, 130)
             : const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
-          if (widget.embedded) ...[Text('Skills', style: text.displaySmall), const SizedBox(height: 16)],
+          if (widget.embedded) ...[Text(tr('Skills'), style: text.displaySmall), const SizedBox(height: 16)],
           TextField(
             controller: query,
             textInputAction: TextInputAction.search,
@@ -184,7 +185,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
               });
             },
             decoration: InputDecoration(
-              hintText: 'Search skills: design, pdf, testing…',
+              hintText: tr('Search skills: design, pdf, testing…'),
               prefixIcon: const Icon(LucideIcons.search, size: 18),
               suffixIcon: query.text.isEmpty
                   ? null
@@ -203,23 +204,28 @@ class _SkillsScreenState extends State<SkillsScreen> {
             style: text.bodySmall,
           ),
           if (searching) ...[
-            const SectionLabel('Results'),
-            _HitList(future: results!, installing: installing, onInstall: _installHit, emptyText: 'No skills match.'),
+            SectionLabel(tr('Results')),
+            _HitList(
+              future: results!,
+              installing: installing,
+              onInstall: _installHit,
+              emptyText: tr('No skills match.'),
+            ),
           ] else ...[
-            const SectionLabel('Recommended'),
+            SectionLabel(tr('Recommended')),
             _HitList(
               future: recommended.then((l) => l.where((h) => !h.installed).take(6).toList()),
               installing: installing,
               onInstall: _installHit,
-              emptyText: 'You have all the recommended skills.',
+              emptyText: tr('You have all the recommended skills.'),
             ),
-            const SectionLabel('Installed'),
+            SectionLabel(tr('Installed')),
             FutureBuilder<List<SkillInfo>>(
               future: installed,
               builder: (context, snap) {
                 if (!snap.hasData) return const _Loading();
                 final list = snap.data!;
-                if (list.isEmpty) return Text('No skills yet.', style: text.bodySmall);
+                if (list.isEmpty) return Text(tr('No skills yet.'), style: text.bodySmall);
                 return SettingsGroup(
                   children: [
                     for (final s in list)
@@ -227,20 +233,20 @@ class _SkillsScreenState extends State<SkillsScreen> {
                         leading: _SkillIcon(builtin: s.builtin, origin: s.source),
                         title: s.name,
                         subtitle: s.description,
-                        trailing: s.builtin ? Pill('AndroPI', color: p.accent) : null,
+                        trailing: s.builtin ? Pill(tr('AndroPI'), color: p.accent) : null,
                         onTap: () => _open(s),
                       ),
                   ],
                 );
               },
             ),
-            const SectionLabel('Add from a link'),
+            SectionLabel(tr('Add from a link')),
             SurfaceCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'A GitHub repo or folder (owner/repo/path), a skills.md name, or a link to a SKILL.md.',
+                    tr('A GitHub repo or folder (owner/repo/path), a skills.md name, or a link to a SKILL.md.'),
                     style: text.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -259,13 +265,13 @@ class _SkillsScreenState extends State<SkillsScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      FilledButton(onPressed: () => _installLink(link.text), child: const Text('Add')),
+                      FilledButton(onPressed: () => _installLink(link.text), child: Text(tr('Add'))),
                     ],
                   ),
                 ],
               ),
             ),
-            const SectionLabel('Browse'),
+            SectionLabel(tr('Browse')),
             SettingsGroup(
               children: [
                 for (final (repo, title, blurb) in _collections)
@@ -279,7 +285,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
                   icon: LucideIcons.store,
                   color: const Color(0xFF14B8A6),
                   title: 'skills.md',
-                  subtitle: 'Hosted skills; most need the skills.md CLI',
+                  subtitle: tr('Hosted skills; most need the skills.md CLI'),
                   trailing: Icon(LucideIcons.externalLink, size: 16, color: p.faint),
                   onTap: () => widget.agent.client.openUrl('https://skills.md'),
                 ),
@@ -477,7 +483,7 @@ class _BrowseSheetState extends State<_BrowseSheet> {
                           const SizedBox(width: 12),
                           Expanded(child: Text(s.name, style: text.titleSmall)),
                           s.installed
-                              ? Pill('Installed', color: p.success, icon: LucideIcons.check)
+                              ? Pill(tr('Installed'), color: p.success, icon: LucideIcons.check)
                               : TextButton.icon(
                                   onPressed: () async {
                                     await widget.onInstall(s.source);
@@ -488,7 +494,7 @@ class _BrowseSheetState extends State<_BrowseSheet> {
                                     }
                                   },
                                   icon: const Icon(LucideIcons.download, size: 15),
-                                  label: const Text('Install'),
+                                  label: Text(tr('Install')),
                                 ),
                         ],
                       ),

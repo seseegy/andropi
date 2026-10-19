@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' show highlight, Node;
 
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Token colors for highlight.js class names, tuned to sit on [Palette.surface].
@@ -200,7 +201,7 @@ class CodeBox extends StatelessWidget {
                     style: TextStyle(fontFamily: mono, fontSize: 11.5, color: p.muted),
                   ),
                 ),
-                if (onPreview != null) _HeaderAction(icon: LucideIcons.play, label: 'Preview', onTap: onPreview!),
+                if (onPreview != null) _HeaderAction(icon: LucideIcons.play, label: tr('Preview'), onTap: onPreview!),
                 CopyButton(text: text),
                 const SizedBox(width: 4),
               ],

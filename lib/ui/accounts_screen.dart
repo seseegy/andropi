@@ -8,6 +8,7 @@ import '../agent/integrations.dart';
 import 'code_view.dart';
 import 'kit.dart';
 import 'task_log.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// GitHub, Vercel, the device SSH key and saved servers.
@@ -46,7 +47,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
       listenable: it,
       builder: (context, _) => Scaffold(
         appBar: AppBar(
-          title: const Text('Accounts & servers'),
+          title: Text(tr('Accounts & servers')),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
             child: Divider(height: 1, color: p.border),
@@ -57,7 +58,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
             : ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 children: [
-                  const _Header('GitHub'),
+                  _Header(tr('GitHub')),
                   it.github == null
                       ? _GithubConnect(
                           agent: widget.agent,
@@ -65,7 +66,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           onDone: () => _snack('GitHub connected'),
                           tokenFallback: _TokenConnect(
                             icon: SimpleIcons.github,
-                            title: 'Connect GitHub',
+                            title: tr('Connect GitHub'),
                             body:
                                 'Clone your repositories, push commits and publish to GitHub Pages. '
                                 'Create a classic token with the repo and workflow scopes, then paste it here.',
@@ -84,11 +85,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           subtitle: '@${it.github!.login} · git push and Pages enabled',
                           onDisconnect: () => _guard(it.githubLogout),
                         ),
-                  const _Header('Vercel'),
+                  _Header(tr('Vercel')),
                   it.vercelUser == null
                       ? _TokenConnect(
                           icon: SimpleIcons.vercel,
-                          title: 'Connect Vercel',
+                          title: tr('Connect Vercel'),
                           body: 'Deploy any project folder to Vercel from the chat. Create an access token and paste it here.',
                           linkLabel: 'Create a token',
                           onLink: () => widget.agent.client.openUrl('https://vercel.com/account/tokens'),
@@ -98,23 +99,23 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       : _Connected(
                           icon: SimpleIcons.vercel,
                           title: it.vercelUser!,
-                          subtitle: 'Deploys enabled',
+                          subtitle: tr('Deploys enabled'),
                           onDisconnect: () => _guard(it.vercelLogout),
                         ),
-                  const _Header('SSH key'),
+                  _Header(tr('SSH key')),
                   _SshKeyCard(integrations: it, openUrl: widget.agent.client.openUrl),
                   _Header(
-                    'Servers',
+                    tr('Servers'),
                     trailing: TextButton.icon(
                       onPressed: () => _editHost(null),
                       icon: const Icon(LucideIcons.plus, size: 18),
-                      label: const Text('Add'),
+                      label: Text(tr('Add')),
                     ),
                   ),
                   if (it.hosts.isEmpty)
                     _Card(
                       child: Text(
-                        'Save a server to deploy over SSH. The agent can reach it too, as `ssh <name>`.',
+                        tr('Save a server to deploy over SSH. The agent can reach it too, as `ssh <name>`.'),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -130,7 +131,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     if (!mounted) return;
     await runWithLog<void>(
       context,
-      title: 'Connecting to ${h.name}',
+      title: '${tr('Connecting to')} ${h.name}',
       task: (log, _) => it.testHost(h.id, onLine: log),
     );
   }
@@ -257,7 +258,7 @@ class _GithubConnectState extends State<_GithubConnect> {
                 children: [
                   IconTile(icon: SimpleIcons.github, color: p.text, size: 36),
                   const SizedBox(width: 10),
-                  Text('Connect GitHub', style: text.titleSmall),
+                  Text(tr('Connect GitHub'), style: text.titleSmall),
                 ],
               ),
               const SizedBox(height: 8),
@@ -271,7 +272,7 @@ class _GithubConnectState extends State<_GithubConnect> {
               const SizedBox(height: 14),
               if (f == null)
                 PrimaryButton(
-                  label: 'Sign in with GitHub',
+                  label: tr('Sign in with GitHub'),
                   icon: SimpleIcons.github,
                   busy: starting,
                   onPressed: starting ? null : _start,
@@ -305,11 +306,11 @@ class _GithubConnectState extends State<_GithubConnect> {
                       child: OutlinedButton.icon(
                         onPressed: () => widget.agent.client.openUrl(f.verificationUri),
                         icon: const Icon(LucideIcons.externalLink, size: 16),
-                        label: const Text('Open GitHub'),
+                        label: Text(tr('Open GitHub')),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    TextButton(onPressed: _cancel, child: const Text('Cancel')),
+                    TextButton(onPressed: _cancel, child: Text(tr('Cancel'))),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -318,7 +319,7 @@ class _GithubConnectState extends State<_GithubConnect> {
                   children: [
                     SizedBox.square(dimension: 12, child: CircularProgressIndicator(strokeWidth: 1.6, color: p.muted)),
                     const SizedBox(width: 8),
-                    Text('Waiting for you to approve on GitHub…', style: text.bodySmall),
+                    Text(tr('Waiting for you to approve on GitHub…'), style: text.bodySmall),
                   ],
                 ),
               ],
@@ -415,7 +416,7 @@ class _TokenConnectState extends State<_TokenConnect> {
             onPressed: busy ? null : _connect,
             child: busy
                 ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Connect'),
+                : Text(tr('Connect')),
           ),
         ],
       ),
@@ -464,7 +465,7 @@ class _Connected extends StatelessWidget {
           TextButton(
             onPressed: onDisconnect,
             style: TextButton.styleFrom(foregroundColor: p.danger),
-            child: const Text('Disconnect'),
+            child: Text(tr('Disconnect')),
           ),
         ],
       ),
@@ -512,7 +513,7 @@ class _SshKeyCardState extends State<_SshKeyCard> {
                       }
                     },
               icon: const Icon(LucideIcons.keyRound, size: 18),
-              label: const Text('Generate key'),
+              label: Text(tr('Generate key')),
             )
           else ...[
             CodeBox(text: key, label: 'id_ed25519.pub', lineNumbers: false),
@@ -523,10 +524,10 @@ class _SshKeyCardState extends State<_SshKeyCard> {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: key));
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Public key copied')));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Public key copied'))));
                     },
                     icon: const Icon(LucideIcons.copy, size: 16),
-                    label: const Text('Copy'),
+                    label: Text(tr('Copy')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -537,7 +538,7 @@ class _SshKeyCardState extends State<_SshKeyCard> {
                       widget.openUrl('https://github.com/settings/ssh/new');
                     },
                     icon: const Icon(LucideIcons.externalLink, size: 16),
-                    label: const Text('Add to GitHub'),
+                    label: Text(tr('Add to GitHub')),
                   ),
                 ),
               ],
@@ -589,7 +590,7 @@ class _HostTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                TextButton(onPressed: onTest, child: const Text('Test')),
+                TextButton(onPressed: onTest, child: Text(tr('Test'))),
               ],
             ),
           ),
@@ -666,14 +667,14 @@ class _HostSheetState extends State<_HostSheet> {
                   'user': user.text,
                   'path': path.text,
                 }),
-                child: const Text('Save'),
+                child: Text(tr('Save')),
               ),
               if (widget.host != null) ...[
                 const SizedBox(height: 8),
                 TextButton(
                   style: TextButton.styleFrom(foregroundColor: p.danger),
                   onPressed: () => Navigator.of(context).pop({'delete': true}),
-                  child: const Text('Remove server'),
+                  child: Text(tr('Remove server')),
                 ),
               ],
             ],

@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../agent/agent_controller.dart';
+import '../agent/drafts.dart';
 import '../agent/models.dart';
 import '../agent/features.dart';
 import 'i18n.dart';
 import 'chat_extras.dart';
 import 'deploy_sheet.dart';
+import 'message_menu.dart';
 import 'message_views.dart';
 
 import 'package:simple_icons/simple_icons.dart';
@@ -56,6 +58,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final attachments = <Attachment>[];
   List<SlashCommand>? slash;
 
+  /// The chat whose draft the input holds.
+  String? draftChat;
+
   AgentController get agent => widget.agent;
 
   /// "/par" while typing a command name; null otherwise.
@@ -69,8 +74,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     agent.addListener(_onAgentChanged);
-    final prompt = widget.initialPrompt;
-    if (prompt != null) {
+    draftChat = agent.sessionId;
+    final prompt = widget.initialPrompt ?? Drafts.instance.get(draftChat);
+    if (prompt.isNotEmpty) {
       input.text = prompt;
       input.selection = TextSelection.collapsed(offset: prompt.length);
       WidgetsBinding.instance.addPostFrameCallback((_) => focus.requestFocus());
@@ -80,10 +86,16 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_atBottom != followBottom) setState(() => followBottom = _atBottom);
     });
     input.addListener(() {
+      Drafts.instance.set(draftChat, input.text);
       if (_slashQuery != null && slash == null) _loadSlash();
       setState(() {});
     });
-    attachments.addAll(widget.initialAttachments);
+    if (widget.initialAttachments.isNotEmpty) {
+      attachments.addAll(widget.initialAttachments);
+      _saveFiles();
+    } else {
+      attachments.addAll(_draftFiles());
+    }
     if (widget.listenOnOpen) WidgetsBinding.instance.addPostFrameCallback((_) => _voice());
     // History may have loaded before this screen existed.
     lastCount = agent.entries.length;
@@ -93,6 +105,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     agent.removeListener(_onAgentChanged);
+    Drafts.instance.flush();
     scroll.dispose();
     input.dispose();
     focus.dispose();
@@ -115,9 +128,33 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onAgentChanged() {
+    // Another chat opened under this screen (new chat, fork, the open one deleted): bring its draft along.
+    if (agent.sessionId != draftChat) {
+      draftChat = agent.sessionId;
+      final draft = Drafts.instance.get(draftChat);
+      input.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+      setState(() {
+        attachments
+          ..clear()
+          ..addAll(_draftFiles());
+      });
+    }
     final grew = agent.entries.length != lastCount;
     lastCount = agent.entries.length;
     if (followBottom || grew && agent.entries.lastOrNull is UserEntry) _jumpToBottom();
+  }
+
+  /// The open chat's saved attachments, still on disk.
+  List<Attachment> _draftFiles() => [
+    for (final f in Drafts.instance.files(draftChat)) Attachment(f.path, f.name, mime: f.mime),
+  ];
+
+  /// Keeps the attachments with the draft (copied into app storage, so they survive the picker's cache).
+  void _saveFiles() {
+    Drafts.instance.setFiles(draftChat, [for (final a in attachments) (path: a.path, name: a.name, mime: a.mime)]);
   }
 
   void _jumpToBottom({bool animate = false, int passes = 4}) {
@@ -157,6 +194,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final files = List<Attachment>.of(attachments);
     input.clear();
     setState(() => attachments.clear());
+    _saveFiles();
     followBottom = true;
     if (files.isEmpty) {
       await agent.send(text);
@@ -187,7 +225,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _attach() async {
     final picked = await pickAttachments(context);
-    if (picked.isNotEmpty) setState(() => attachments.addAll(picked));
+    if (picked.isNotEmpty) {
+      setState(() => attachments.addAll(picked));
+      _saveFiles();
+    }
   }
 
   Future<void> _voice() async {
@@ -199,7 +240,7 @@ class _ChatScreenState extends State<ChatScreen> {
       input.selection = TextSelection.collapsed(offset: input.text.length);
       focus.requestFocus();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Voice input: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${tr('Voice input')}: $e')));
     }
   }
 
@@ -210,42 +251,33 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Long-press on one of your messages: edit & resend, fork, copy.
-  Future<void> _userMenu(UserEntry entry, int userIndex) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: SettingsGroup(
-            children: [
-              SettingsRow(
-                icon: LucideIcons.pencil,
-                color: const Color(0xFF3E63DD),
-                title: tr('Edit & resend'),
-                subtitle: tr('Rewind to this message and change it'),
-                onTap: () => Navigator.pop(context, 'edit'),
-              ),
-              SettingsRow(
-                icon: LucideIcons.gitFork,
-                color: const Color(0xFF7C5CFC),
-                title: tr('Fork from here'),
-                subtitle: tr('A new chat that branches off before this message'),
-                onTap: () => Navigator.pop(context, 'fork'),
-              ),
-              SettingsRow(
-                icon: LucideIcons.copy,
-                color: const Color(0xFF6B6B73),
-                title: tr('Copy'),
-                onTap: () => Navigator.pop(context, 'copy'),
-              ),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _userMenu(BuildContext bubbleContext, UserEntry entry, int userIndex) async {
+    final action = await showMessageMenu(
+      bubbleContext,
+      bubble: UserBubble(entry.text),
+      actions: [
+        MessageAction('copy', tr('Copy'), LucideIcons.copy),
+        MessageAction('select', tr('Select text'), LucideIcons.textCursorInput),
+        MessageAction('edit', tr('Edit & resend'), LucideIcons.pencil),
+        MessageAction('fork', tr('Fork from here'), LucideIcons.gitFork),
+      ],
     );
     if (action == null || !mounted) return;
     if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: entry.text));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Copied'))));
+      return;
+    }
+    if (action == 'select') {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (context) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: SingleChildScrollView(child: SelectableText(entry.text, style: Theme.of(context).textTheme.bodyLarge)),
+        ),
+      );
       return;
     }
     if (agent.busy) {
@@ -375,7 +407,10 @@ class _ChatScreenState extends State<ChatScreen> {
               onAttach: _attach,
               onVoice: _voice,
               attachments: attachments,
-              onRemoveAttachment: (a) => setState(() => attachments.remove(a)),
+              onRemoveAttachment: (a) {
+                setState(() => attachments.remove(a));
+                _saveFiles();
+              },
               onPickModel: () => showModelSheet(context, agent),
             ),
           ],
@@ -386,16 +421,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _transcript() {
     final entries = agent.entries;
+    final retry = agent.endsInError;
     return ListView.builder(
       controller: scroll,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      itemCount: entries.length,
+      itemCount: entries.length + (retry ? 1 : 0),
       itemBuilder: (context, i) {
+        if (i == entries.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: _RetryBar(onRetry: agent.retry, onPickModel: () => showModelSheet(context, agent)),
+          );
+        }
         final e = entries[i];
         final child = switch (e) {
           UserEntry() => UserMessageView(
             e,
-            onLongPress: () => _userMenu(e, entries.take(i).whereType<UserEntry>().length),
+            onLongPress: (bubble) => _userMenu(bubble, e, entries.take(i).whereType<UserEntry>().length),
           ),
           AssistantEntry() => AssistantMessageView(e, tools: agent.tools, cwd: agent.cwd, live: agent),
           NoticeEntry() => NoticeView(e),
@@ -406,6 +448,33 @@ class _ChatScreenState extends State<ChatScreen> {
           child: child,
         );
       },
+    );
+  }
+}
+
+/// Shown under a failed turn: try again, or switch model first.
+class _RetryBar extends StatelessWidget {
+  const _RetryBar({required this.onRetry, required this.onPickModel});
+  final VoidCallback onRetry;
+  final VoidCallback onPickModel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.tonalIcon(
+          onPressed: onRetry,
+          icon: const Icon(LucideIcons.rotateCcw, size: 16),
+          label: Text(tr('Try again')),
+        ),
+        OutlinedButton.icon(
+          onPressed: onPickModel,
+          icon: const Icon(LucideIcons.sparkles, size: 16),
+          label: Text(tr('Switch model')),
+        ),
+      ],
     );
   }
 }

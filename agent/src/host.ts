@@ -12,8 +12,8 @@
  * stdout is reserved for protocol records; logs go to stderr.
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	type AgentSession,
@@ -31,12 +31,13 @@ import { Container, type Distro } from "./container.js";
 import { installDohLookup } from "./dns.js";
 import * as gitops from "./gitops.js";
 import { Guard } from "./guard.js";
-import { Integrations, type Log } from "./integrations.js";
+import { Integrations, type Log, run } from "./integrations.js";
 import { installLenientTools } from "./lenient.js";
 import { Mcp } from "./mcp.js";
 import { CustomProviders, fetchModels } from "./providers.js";
 import { type RunSession, Runner } from "./runs.js";
 import { Skills } from "./skills.js";
+import { GitHubSync } from "./sync.js";
 import { webTools } from "./web.js";
 import {
 	collectFiles,
@@ -71,6 +72,7 @@ let checkpoints: Checkpoints;
 let runner: Runner;
 let mcp: Mcp;
 let customProviders: CustomProviders;
+let sync: GitHubSync;
 const tunnels = new Tunnels();
 let unsubscribe: (() => void) | undefined;
 
@@ -165,8 +167,11 @@ async function buildSession(sessionManager: SessionManager, opts: { interactive:
 	return result;
 }
 
-let lastUserText = "";
+/** The last prompt sent from the app until it reaches the history, so Try again can send it once more. */
+let lastPrompt: { text: string; images?: any[]; sessionId: string } | null = null;
 let fallbackTried = false;
+/** A fallback model is about to continue the failed turn; the turn is not over for the app's purposes. */
+let fallbackPending = false;
 
 async function openSession(sessionManager: SessionManager) {
 	unsubscribe?.();
@@ -184,14 +189,32 @@ async function openSession(sessionManager: SessionManager) {
 
 /** Hooks on the active chat: model fallback and "done" notifications. */
 function onSessionEvent(event: AgentSessionEvent) {
+	if (event.type === "message_start" && lastPrompt) {
+		const m = (event as any).message;
+		if (m?.role === "user" && messageText(m).includes(lastPrompt.text)) lastPrompt = null;
+	}
 	if (event.type === "message_end") {
 		const m = (event as any).message;
 		if (m?.role === "assistant" && m.stopReason === "error") void tryFallback(String(m.errorMessage ?? ""));
 	}
 	if (event.type === "agent_end" || (event as any).type === "agent_settled") {
 		const text = session?.getLastAssistantText?.() ?? "";
-		send({ type: "agent_done", sessionFile: session?.sessionFile ?? null, preview: text.slice(0, 200) });
+		send({
+			type: "agent_done",
+			sessionFile: session?.sessionFile ?? null,
+			preview: text.slice(0, 200),
+			// A fallback model is taking over (or already running): not finished, and not failed.
+			retrying: fallbackPending || !!session?.isStreaming,
+		});
+		// Sync a little after the turn, so a quick follow-up doesn't cause two pushes.
+		sync?.schedule(90_000);
 	}
+}
+
+function messageText(m: any): string {
+	return typeof m?.content === "string"
+		? m.content
+		: (m?.content ?? []).map((c: any) => (c.type === "text" ? c.text : "")).join("");
 }
 
 async function tryFallback(error: string) {
@@ -203,10 +226,15 @@ async function tryFallback(error: string) {
 	const model = next && modelRuntime.getModel(next.provider, next.model);
 	if (!model) return;
 	fallbackTried = true;
-	await session.setModel(model, { persist: false });
-	send({ type: "notice", message: `Switched to ${model.name ?? model.id} after an error: ${error.slice(0, 120)}` });
-	send({ type: "state", state: state() });
-	session.prompt("Continue where you left off (the previous model failed).").catch(() => {});
+	fallbackPending = true;
+	try {
+		await session.setModel(model, { persist: false });
+		send({ type: "notice", message: `Switched to ${model.name ?? model.id} after an error: ${error.slice(0, 120)}` });
+		send({ type: "state", state: state() });
+		session.prompt("Continue where you left off (the previous model failed).").catch(() => {});
+	} finally {
+		fallbackPending = false;
+	}
 }
 
 /** Refuses new work once today's spend reaches the configured cap. */
@@ -349,6 +377,90 @@ async function providers() {
 }
 
 // ---------------------------------------------------------------------------
+// Deleting chats and projects
+
+const sessionsDir = () => resolve(agentDir, "sessions");
+const within = (path: string, dir: string) => path === dir || path.startsWith(dir + sep);
+
+/** Deletes chat files. The open chat is swapped for a fresh one first, in [cwd] or its own folder. */
+async function deleteSessions(paths: string[], cwd?: string) {
+	const s = session!;
+	const files = paths.map((p) => resolve(p)).filter((p) => within(p, sessionsDir()) && p.endsWith(".jsonl"));
+	const current = s.sessionFile ? resolve(s.sessionFile) : undefined;
+	if (current && files.includes(current)) {
+		if (s.isStreaming) throw new Error("Stop the agent before deleting the open chat");
+		await openSession(SessionManager.create(cwd ?? s.sessionManager.getCwd()));
+	}
+	let deleted = 0;
+	for (const f of files) {
+		try {
+			unlinkSync(f);
+			deleted++;
+		} catch {
+			// Already gone.
+		}
+	}
+	return { deleted, ...state() };
+}
+
+/** A project is a folder directly inside the workspace; nothing else may be deleted. */
+function projectDir(path: string) {
+	const dir = resolve(path);
+	if (dirname(dir) !== resolve(workspace)) throw new Error("Only projects inside the workspace can be deleted");
+	if (!existsSync(dir)) throw new Error("The project folder no longer exists");
+	return dir;
+}
+
+/** What deleting a project would lose, and what stops it right now. */
+async function projectDeleteCheck(path: string) {
+	const dir = projectDir(path);
+	const chats = (await SessionManager.listAll()).filter((i) => i.cwd && within(resolve(i.cwd), dir));
+	const git = existsSync(join(dir, ".git"));
+	const lines = async (args: string[]) =>
+		(await run("git", args, { cwd: dir }).catch(() => "")).split("\n").filter((l) => l.trim()).length;
+	const blockers: string[] = [];
+	const s = session!;
+	if (s.isStreaming && within(resolve(s.sessionManager.getCwd()), dir)) blockers.push("The agent is working in this project");
+	const { runs, schedules } = runner.summary();
+	const busyRuns = runs.filter((r) => (r.status === "queued" || r.status === "running") && r.cwd && within(resolve(r.cwd), dir));
+	if (busyRuns.length) blockers.push(`${busyRuns.length} background task(s) use this project`);
+	const busySchedules = schedules.filter((x) => x.enabled && x.cwd && within(resolve(x.cwd), dir));
+	if (busySchedules.length) blockers.push(`${busySchedules.length} schedule(s) use this project`);
+	return {
+		path: dir,
+		chats: chats.length,
+		git,
+		// Uncommitted files, and commits on local branches that no remote has.
+		changes: git ? await lines(["status", "--porcelain"]) : 0,
+		unpushed: git ? await lines(["log", "--branches", "--not", "--remotes", "--format=%h"]) : 0,
+		blockers,
+	};
+}
+
+async function deleteProject(path: string, deleteChats: boolean) {
+	const check = await projectDeleteCheck(path);
+	if (check.blockers.length) throw new Error(check.blockers.join("; "));
+	const dir = check.path;
+	const s = session!;
+	// Leave the project first so nothing keeps working in a folder that is about to vanish.
+	if (within(resolve(s.sessionManager.getCwd()), dir)) await openSession(SessionManager.create(workspace));
+	let deletedChats = 0;
+	if (deleteChats) {
+		const files = (await SessionManager.listAll()).filter((i) => i.cwd && within(resolve(i.cwd), dir)).map((i) => i.path);
+		deletedChats = (await deleteSessions(files, workspace)).deleted;
+	}
+	try {
+		rmSync(dir, { recursive: true, force: true });
+	} catch {
+		// Tools in the container leave read-only folders (Go and npm caches); make them writable and retry.
+		await run("chmod", ["-R", "u+rwX", dir], { cwd: workspace }).catch(() => "");
+		rmSync(dir, { recursive: true, force: true });
+	}
+	checkpoints.forget(dir);
+	return { deletedChats, ...state() };
+}
+
+// ---------------------------------------------------------------------------
 // Backups
 
 function backupTarget() {
@@ -416,8 +528,9 @@ async function handle(cmd: Command): Promise<unknown> {
 			return state();
 
 		case "prompt": {
+			// Remembered before anything can refuse it, so Try again knows what was asked.
+			lastPrompt = { text: cmd.text, images: cmd.images, sessionId: s.sessionId };
 			checkBudget();
-			lastUserText = cmd.text;
 			fallbackTried = false;
 			// Plan mode: ask for a plan first; tools that change things are blocked (guard.ts).
 			const text = guard.planMode
@@ -428,6 +541,28 @@ async function handle(cmd: Command): Promise<unknown> {
 				images: cmd.images,
 				streamingBehavior: s.isStreaming ? (cmd.behavior ?? "followUp") : undefined,
 			}).catch((e) => send({ type: "error", message: String(e?.message ?? e) }));
+			return null;
+		}
+		case "retry": {
+			// After a failed turn: continue it if the request made it into the history, else send the prompt again.
+			if (s.isStreaming) throw new Error("The agent is still working");
+			checkBudget();
+			const last = (s.messages as any[]).at(-1);
+			const failedTurn = last && (last.role === "user" || (last.role === "assistant" && last.stopReason === "error"));
+			// The last prompt from this chat that never made it into the history (refused, or failed to start).
+			const unsent = lastPrompt && lastPrompt.sessionId === s.sessionId ? lastPrompt : null;
+			fallbackTried = false;
+			if (unsent) {
+				s.prompt(unsent.text, { images: unsent.images }).catch((e) =>
+					send({ type: "error", message: String(e?.message ?? e) }),
+				);
+			} else if (failedTurn) {
+				s.prompt("Continue where you left off (the previous request failed).").catch((e) =>
+					send({ type: "error", message: String(e?.message ?? e) }),
+				);
+			} else {
+				throw new Error("Nothing to retry");
+			}
 			return null;
 		}
 		case "steer":
@@ -498,6 +633,19 @@ async function handle(cmd: Command): Promise<unknown> {
 			await modelRuntime.logout(cmd.provider);
 			return providers();
 
+		// GitHub sync (sync.ts).
+		case "sync_status":
+			return sync.status();
+		case "sync_enable":
+			return sync.setEnabled(!!cmd.on);
+		case "sync_now":
+			// "soon": the app is going to the background; give a running turn a moment to settle.
+			if (cmd.soon) {
+				sync.schedule(2000);
+				return sync.status();
+			}
+			return sync.syncNow();
+
 		// Custom endpoints (providers.ts).
 		case "custom_providers":
 			return customProviders.list();
@@ -537,9 +685,13 @@ async function handle(cmd: Command): Promise<unknown> {
 			return null;
 		}
 		case "delete_session":
-			if (cmd.path === s.sessionFile) throw new Error("Switch to another session before deleting this one");
-			unlinkSync(cmd.path);
-			return null;
+			return deleteSessions([cmd.path]);
+		case "delete_sessions":
+			return deleteSessions(cmd.paths ?? []);
+		case "project_delete_check":
+			return projectDeleteCheck(cmd.path);
+		case "delete_project":
+			return deleteProject(cmd.path, !!cmd.deleteChats);
 		case "messages":
 			return s.messages;
 
@@ -850,6 +1002,21 @@ async function main() {
 		await settingsManager.flush();
 	}
 	await openSession(SessionManager.continueRecent(workspace));
+	sync = new GitHubSync({
+		agentDir,
+		workspace,
+		stateDir,
+		integrations,
+		providers: customProviders,
+		activeSession: () => session?.sessionFile,
+		busy: () => !!session?.isStreaming || (runner?.summary().running ?? 0) > 0,
+		providersChanged: async () => {
+			await modelRuntime.refresh({ allowNetwork: false });
+		},
+		notify: (status) => send({ type: "sync", status }),
+	});
+	// Pick up what other phones synced while this one was off.
+	sync.schedule(20_000);
 	runner = new Runner(join(stateDir, "runs.json"), backgroundSession, send, (p) => integrations.githubApi(p));
 
 	// Starter skills and MCP connections come up in the background; the chat

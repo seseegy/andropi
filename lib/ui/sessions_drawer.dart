@@ -5,6 +5,7 @@ import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import '../agent/models.dart';
 import 'accounts_screen.dart';
+import 'delete_flows.dart';
 import 'repos_screen.dart';
 import 'kit.dart';
 import 'settings_hub.dart';
@@ -13,6 +14,7 @@ import 'package:simple_icons/simple_icons.dart';
 
 import 'new_chat_sheet.dart';
 import 'folder_picker.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 class SessionsDrawer extends StatefulWidget {
@@ -57,7 +59,6 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
   }
 
   Future<void> _sessionMenu(SessionSummary s) async {
-    final active = s.id == agent.sessionId;
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -75,14 +76,12 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
             ),
             ListTile(
               leading: const Icon(LucideIcons.pencil),
-              title: const Text('Rename'),
+              title: Text(tr('Rename')),
               onTap: () => Navigator.of(context).pop('rename'),
             ),
             ListTile(
-              enabled: !active,
-              leading: Icon(LucideIcons.trash2, color: active ? null : context.palette.danger),
-              title: Text('Delete', style: TextStyle(color: active ? null : context.palette.danger)),
-              subtitle: active ? const Text('Switch to another session first') : null,
+              leading: Icon(LucideIcons.trash2, color: context.palette.danger),
+              title: Text(tr('Delete'), style: TextStyle(color: context.palette.danger)),
               onTap: () => Navigator.of(context).pop('delete'),
             ),
             const SizedBox(height: 8),
@@ -96,18 +95,18 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
       final name = await showDialog<String>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Rename session'),
+          title: Text(tr('Rename session')),
           content: TextField(controller: controller, autofocus: true, onSubmitted: (v) => Navigator.of(context).pop(v)),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Save')),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Cancel'))),
+            FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: Text(tr('Save'))),
           ],
         ),
       );
       controller.dispose();
       if (name != null && name.trim().isNotEmpty) await agent.renameSession(s.path, name.trim());
     } else if (action == 'delete') {
-      await agent.deleteSession(s.path);
+      if (!await deleteChats(context, agent, [s])) return;
     }
     _reload();
   }
@@ -147,15 +146,15 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
                             children: [
                               const LogoMark(size: 30, glow: false),
                               const SizedBox(width: 10),
-                              Text('AndroPI', style: text.titleLarge),
+                              Text(tr('AndroPI'), style: text.titleLarge),
                               const Spacer(),
                               IconButton(
-                                tooltip: 'Accounts & servers',
+                                tooltip: tr('Accounts & servers'),
                                 icon: const Icon(LucideIcons.circleUser),
                                 onPressed: () => _push(AccountsScreen(agent: agent)),
                               ),
                               IconButton(
-                                tooltip: 'Settings',
+                                tooltip: tr('Settings'),
                                 icon: const Icon(LucideIcons.settings2),
                                 onPressed: () => _push(SettingsHub(agent: agent)),
                               ),
@@ -175,7 +174,7 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
                                           showNewChatSheet(nav.context, agent);
                                         },
                                   icon: LucideIcons.plus,
-                                  label: 'New chat',
+                                  label: tr('New chat'),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -183,7 +182,7 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
                                 child: OutlinedButton.icon(
                                   onPressed: agent.busy ? null : () => _push(ReposScreen(agent: agent)),
                                   icon: const Icon(SimpleIcons.github, size: 16),
-                                  label: const Text('Clone repo'),
+                                  label: Text(tr('Clone repo')),
                                 ),
                               ),
                             ],
@@ -193,9 +192,9 @@ class _SessionsDrawerState extends State<SessionsDrawer> {
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                           child: TextField(
                             onChanged: (v) => setState(() => query = v),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               isDense: true,
-                              hintText: 'Search chats and projects',
+                              hintText: tr('Search chats and projects'),
                               prefixIcon: Icon(LucideIcons.search, size: 18),
                             ),
                           ),
@@ -381,7 +380,7 @@ class _ProjectTile extends StatelessWidget {
             : null,
         trailing: project.dirty
             ? Tooltip(
-                message: 'Uncommitted changes',
+                message: tr('Uncommitted changes'),
                 child: Container(
                   width: 7,
                   height: 7,

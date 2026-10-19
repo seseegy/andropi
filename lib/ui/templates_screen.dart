@@ -5,6 +5,7 @@ import '../agent/agent_controller.dart';
 import '../agent/features.dart';
 import 'illustration.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Prompt templates: reusable prompts the user runs as `/name args` in chat.
@@ -72,11 +73,11 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete /${t.name}?'),
-        content: const Text('The slash command will no longer be available in chat.'),
+        title: Text('${tr('Delete')} /${t.name}?'),
+        content: Text(tr('The slash command will no longer be available in chat.')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Delete'))),
         ],
       ),
     );
@@ -98,8 +99,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     final list = _templates;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Prompt templates'),
-        actions: [IconButton(tooltip: 'New template', onPressed: _edit, icon: const Icon(LucideIcons.plus))],
+        title: Text(tr('Prompt templates')),
+        actions: [IconButton(tooltip: tr('New template'), onPressed: _edit, icon: const Icon(LucideIcons.plus))],
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -114,12 +115,12 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                     children: [
                       IconTile(icon: LucideIcons.slash, color: p.accent),
                       const SizedBox(width: 12),
-                      Expanded(child: Text('Slash commands', style: text.titleMedium)),
+                      Expanded(child: Text(tr('Slash commands'), style: text.titleMedium)),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Type /name followed by arguments in chat and pi expands the template.',
+                    tr('Type /name followed by arguments in chat and pi expands the template.'),
                     style: text.bodyMedium?.copyWith(color: p.muted),
                   ),
                   const SizedBox(height: 12),
@@ -148,11 +149,11 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               ),
             ),
             SectionLabel(
-              'Templates',
+              tr('Templates'),
               trailing: TextButton.icon(
                 onPressed: _edit,
                 icon: const Icon(LucideIcons.plus, size: 14),
-                label: const Text('New template'),
+                label: Text(tr('New template')),
               ),
             ),
             if (_error != null)
@@ -171,7 +172,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   children: [
                     const Illustration('ai', height: 140),
                     const SizedBox(height: 8),
-                    Text('No templates yet. Save a prompt you use often.', style: text.bodySmall),
+                    Text(tr('No templates yet. Save a prompt you use often.'), style: text.bodySmall),
                   ],
                 ),
               )
@@ -217,9 +218,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                         PopupMenuButton<String>(
                           icon: Icon(LucideIcons.ellipsis, size: 18, color: p.muted),
                           onSelected: (v) => v == 'edit' ? _edit(t) : _delete(t),
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'edit', child: Text('Edit')),
-                            PopupMenuItem(value: 'delete', child: Text('Delete')),
+                          itemBuilder: (_) => [
+                            PopupMenuItem(value: 'edit', child: Text(tr('Edit'))),
+                            PopupMenuItem(value: 'delete', child: Text(tr('Delete'))),
                           ],
                         ),
                       ],
@@ -300,20 +301,20 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               controller: _name,
               autocorrect: false,
               style: const TextStyle(fontFamily: mono),
-              decoration: const InputDecoration(labelText: 'Name', prefixText: '/', hintText: 'review'),
+              decoration: InputDecoration(labelText: tr('Name'), prefixText: '/', hintText: 'review'),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _description,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Description', hintText: 'Review a file for bugs'),
+              decoration: InputDecoration(labelText: tr('Description'), hintText: tr('Review a file for bugs')),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _hint,
               autocorrect: false,
               style: const TextStyle(fontFamily: mono),
-              decoration: const InputDecoration(labelText: 'Argument hint', hintText: '<file> [focus]'),
+              decoration: InputDecoration(labelText: tr('Argument hint'), hintText: '<file> [focus]'),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -321,8 +322,8 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               minLines: 6,
               maxLines: 16,
               style: const TextStyle(fontFamily: mono, fontSize: 13),
-              decoration: const InputDecoration(
-                labelText: 'Body',
+              decoration: InputDecoration(
+                labelText: tr('Body'),
                 alignLabelWithHint: true,
                 hintText: r'Review $1 for bugs, focusing on ${2:-correctness}.',
               ),
@@ -332,7 +333,7 @@ class _TemplateSheetState extends State<_TemplateSheet> {
               Text(_problem!, style: text.bodySmall?.copyWith(color: p.danger)),
             ],
             const SizedBox(height: 18),
-            PrimaryButton(label: 'Save', icon: LucideIcons.check, onPressed: _save),
+            PrimaryButton(label: tr('Save'), icon: LucideIcons.check, onPressed: _save),
           ],
         ),
       ),

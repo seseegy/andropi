@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../agent/agent_controller.dart';
 import 'kit.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// A shell with the agent's toolchain (git, ssh, node…). Sessions outlive the
@@ -123,6 +124,31 @@ alias gs='git status'
   }
 }
 
+/// The selected text, without the padding spaces terminal lines carry.
+String terminalSelectionText(Terminal terminal, TerminalController controller) {
+  final range = controller.selection;
+  if (range == null) return '';
+  final lines = terminal.buffer.getText(range).split('\n').map((l) => l.trimRight()).toList();
+  // Drop blank lines around the selection, but keep the first line's indentation.
+  while (lines.isNotEmpty && lines.first.isEmpty) {
+    lines.removeAt(0);
+  }
+  while (lines.isNotEmpty && lines.last.isEmpty) {
+    lines.removeLast();
+  }
+  return lines.join('\n');
+}
+
+/// Selects the whole buffer, scrollback included.
+void selectAllTerminal(Terminal terminal, TerminalController controller) {
+  final buffer = terminal.buffer;
+  if (buffer.height == 0) return;
+  controller.setSelection(buffer.createAnchor(0, 0), buffer.createAnchor(buffer.viewWidth, buffer.height - 1));
+}
+
+/// A terminal font size: steps of 0.5, between 8 and 28.
+double terminalFontFor(double size) => ((size * 2).round() / 2).clamp(8.0, 28.0).toDouble();
+
 class TerminalScreen extends StatefulWidget {
   const TerminalScreen({super.key, required this.agent, this.command});
   final AgentController agent;
@@ -142,6 +168,21 @@ class _TerminalScreenState extends State<TerminalScreen> {
   final tabScroll = ScrollController();
   bool ctrl = false;
 
+  /// Font size; pinch with two fingers or A−/A+ to change it.
+  double fontSize = Appearance.instance.terminalFontSize;
+  final _pointers = <int, Offset>{};
+  double? _pinchStartDistance;
+
+  /// While pinching the terminal is only scaled; the font (and the pty size) changes once, on release.
+  final _pinchScale = ValueNotifier<double>(1);
+  final scroll = ScrollController();
+  double _pinchScrollOffset = 0;
+
+  /// Whether the selection toolbar shows: a selection in the buffer on screen, and not left over from a pinch.
+  final _hasSelection = ValueNotifier(false);
+  Buffer? _selectionBuffer;
+  Terminal? _watched;
+
   AgentController get agent => widget.agent;
   List<ShellSession> get sessions => ShellSession.sessions;
 
@@ -152,6 +193,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void initState() {
     super.initState();
+    // Long-press (or drag) selects text; the selection toolbar follows it.
+    controller.addListener(_refreshSelection);
     ShellSession.changes.addListener(_changed);
     final command = widget.command;
     if (command != null || session == null) starting = true;
@@ -174,6 +217,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void dispose() {
     ShellSession.changes.removeListener(_changed);
+    controller.removeListener(_refreshSelection);
+    _watched?.removeListener(_refreshSelection);
+    _hasSelection.dispose();
+    _pinchScale.dispose();
+    scroll.dispose();
     for (final s in sessions) {
       s.terminal.onOutput = s.input;
     }
@@ -196,6 +244,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
   }
 
   void _select(int i) {
+    // A selection belongs to the tab it was made in.
+    controller.clearSelection();
     final s = sessions[i];
     ShellSession.selected = i;
     _bind(s);
@@ -259,6 +309,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
       return;
     }
     final i = sessions.indexOf(s);
+    controller.clearSelection();
     s.kill();
     await _newTab(linux: s.linux, title: s.title, command: s.linux ? 'box' : null, replace: i);
   }
@@ -269,11 +320,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Rename tab'),
+        title: Text(tr('Rename tab')),
         content: TextField(controller: field, autofocus: true, onSubmitted: (v) => Navigator.of(context).pop(v)),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(context).pop(field.text), child: const Text('Rename')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.of(context).pop(field.text), child: Text(tr('Rename'))),
         ],
       ),
     );
@@ -289,7 +340,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     try {
       final t = await agent.features.detectTests();
       if (t == null) {
-        messenger.showSnackBar(const SnackBar(content: Text('No test setup found')));
+        messenger.showSnackBar(SnackBar(content: Text(tr('No test setup found'))));
         return;
       }
       await _newTab(command: t.command, title: t.framework.isEmpty ? 'tests' : t.framework);
@@ -313,7 +364,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final hosts = agent.integrations.hosts;
     if (hosts.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Add a server under Accounts & servers first')));
+          .showSnackBar(SnackBar(content: Text(tr('Add a server under Accounts & servers first'))));
       return;
     }
     final name = await showModalBottomSheet<String>(
@@ -341,7 +392,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   Future<void> _historySheet() async {
     final items = ShellSession.history;
     if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No commands yet')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('No commands yet'))));
       return;
     }
     final command = await showModalBottomSheet<String>(
@@ -354,7 +405,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
             shrinkWrap: true,
             padding: const EdgeInsets.only(bottom: 8),
             children: [
-              const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 0), child: SectionLabel('Command history')),
+              Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 0), child: SectionLabel(tr('Command history'))),
               for (final c in items)
                 ListTile(
                   dense: true,
@@ -381,6 +432,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final p = context.palette;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final s = session;
+    _watch(s?.terminal);
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
@@ -389,7 +441,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Terminal'),
+            Text(tr('Terminal')),
             if (s != null)
               Text(
                 s.linux ? 'Linux container' : s.cwd.replaceFirst(RegExp(r'^.*/files/home'), '~'),
@@ -399,41 +451,77 @@ class _TerminalScreenState extends State<TerminalScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Command history',
+            tooltip: tr('Command history'),
             icon: const Icon(LucideIcons.history, size: 20),
             onPressed: _historySheet,
           ),
-          IconButton(tooltip: 'SSH to a server', icon: const Icon(LucideIcons.server, size: 20), onPressed: _sshMenu),
-          IconButton(tooltip: 'Restart shell', icon: const Icon(LucideIcons.rotateCcw, size: 20), onPressed: _restart),
+          IconButton(
+            tooltip: tr('SSH to a server'),
+            icon: const Icon(LucideIcons.server, size: 20),
+            onPressed: _sshMenu,
+          ),
+          IconButton(
+            tooltip: tr('Restart shell'),
+            icon: const Icon(LucideIcons.rotateCcw, size: 20),
+            onPressed: _restart,
+          ),
           const SizedBox(width: 4),
         ],
         bottom: PreferredSize(preferredSize: const Size.fromHeight(49), child: _tabStrip(p)),
       ),
       body: error != null && s == null
-          ? Center(child: Text('Could not start a shell: $error'))
+          ? Center(child: Text('${tr('Could not start a shell')}: $error'))
           : s == null
           ? starting
                 ? const Center(child: SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)))
                 : Center(
                     child: SizedBox(
                       width: 220,
-                      child: PrimaryButton(label: 'New shell', icon: LucideIcons.plus, onPressed: () => _newTab()),
+                      child: PrimaryButton(label: tr('New shell'), icon: LucideIcons.plus, onPressed: () => _newTab()),
                     ),
                   )
           : Column(
               children: [
                 Expanded(
-                  child: TerminalView(
-                    s.terminal,
-                    key: ObjectKey(s),
-                    controller: controller,
-                    focusNode: focus,
-                    autofocus: true,
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                    keyboardType: TextInputType.visiblePassword,
-                    keyboardAppearance: dark ? Brightness.dark : Brightness.light,
-                    textStyle: const TerminalStyle(fontFamily: mono, fontSize: 12.5),
-                    theme: dark ? _darkTheme(p) : _lightTheme(p),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Listener(
+                          onPointerDown: _pointerDown,
+                          onPointerMove: _pointerMove,
+                          onPointerUp: _pointerUp,
+                          onPointerCancel: _pointerUp,
+                          child: ValueListenableBuilder<double>(
+                            valueListenable: _pinchScale,
+                            builder: (context, scale, child) => scale == 1
+                                ? child!
+                                : ClipRect(
+                                    child: Transform.scale(scale: scale, alignment: Alignment.topLeft, child: child),
+                                  ),
+                            child: TerminalView(
+                              s.terminal,
+                              key: ObjectKey(s),
+                              controller: controller,
+                              scrollController: scroll,
+                              focusNode: focus,
+                              autofocus: true,
+                              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                              keyboardType: TextInputType.visiblePassword,
+                              keyboardAppearance: dark ? Brightness.dark : Brightness.light,
+                              textStyle: TerminalStyle(fontFamily: mono, fontSize: fontSize),
+                              theme: dark ? _darkTheme(p) : _lightTheme(p),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Long-press selects; this bar copies it, selects everything, or pastes.
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _hasSelection,
+                        builder: (context, shown, _) => shown
+                            ? Positioned(top: 8, left: 0, right: 0, child: Center(child: _selectionBar(p, s)))
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
                   ),
                 ),
                 _KeyBar(
@@ -442,13 +530,153 @@ class _TerminalScreenState extends State<TerminalScreen> {
                   onKey: _key,
                   onText: _text,
                   onHistory: _historySheet,
-                  onPaste: () async {
-                    final data = await Clipboard.getData(Clipboard.kTextPlain);
-                    if (data?.text != null) s.terminal.paste(data!.text!);
+                  onPaste: () => _paste(s),
+                  onZoomOut: () {
+                    _setFont(fontSize - 1);
+                    _saveFont();
+                  },
+                  onZoomIn: () {
+                    _setFont(fontSize + 1);
+                    _saveFont();
                   },
                 ),
               ],
             ),
+    );
+  }
+
+  /// Re-checks the toolbar on selection changes and on output (output can evict the selected lines, or switch
+  /// to the alternate screen of vim or less, leaving the selection pointing at another buffer).
+  void _refreshSelection() {
+    final s = session;
+    final range = controller.selection;
+    if (range != null && _pinchStartDistance != null) {
+      // A long-press that fired under a pinching finger.
+      controller.clearSelection();
+      return;
+    }
+    if (range == null) {
+      _selectionBuffer = null;
+    } else {
+      _selectionBuffer ??= s?.terminal.buffer;
+    }
+    _hasSelection.value = range != null && s != null && identical(_selectionBuffer, s.terminal.buffer);
+  }
+
+  /// Listens to the shown tab's output.
+  void _watch(Terminal? terminal) {
+    if (identical(terminal, _watched)) return;
+    _watched?.removeListener(_refreshSelection);
+    _watched = terminal;
+    terminal?.addListener(_refreshSelection);
+  }
+
+  Future<void> _copy(ShellSession s) async {
+    final text = _hasSelection.value ? terminalSelectionText(s.terminal, controller) : '';
+    controller.clearSelection();
+    if (text.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Nothing selected any more'))));
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Copied')), duration: const Duration(seconds: 1)));
+    }
+  }
+
+  void _selectAll(ShellSession s) => selectAllTerminal(s.terminal, controller);
+
+  Future<void> _paste(ShellSession s) async {
+    controller.clearSelection();
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text != null && text.isNotEmpty) s.terminal.paste(text);
+    focus.requestFocus();
+  }
+
+  void _setFont(double size) {
+    final next = terminalFontFor(size);
+    if (next != fontSize) setState(() => fontSize = next);
+  }
+
+  void _saveFont() => Appearance.instance.setTerminalFontSize(fontSize);
+
+  // Two-finger pinch, read from raw pointers so it doesn't fight the terminal's own drag and long-press.
+  void _pointerDown(PointerDownEvent e) {
+    _pointers[e.pointer] = e.position;
+    if (_pointers.length == 2) {
+      final pts = _pointers.values.toList();
+      _pinchStartDistance = (pts[0] - pts[1]).distance;
+      _pinchScrollOffset = scroll.hasClients ? scroll.offset : 0;
+      controller.clearSelection();
+    }
+  }
+
+  void _pointerMove(PointerMoveEvent e) {
+    if (!_pointers.containsKey(e.pointer)) return;
+    _pointers[e.pointer] = e.position;
+    final start = _pinchStartDistance;
+    if (_pointers.length != 2 || start == null || start < 10) return;
+    final pts = _pointers.values.toList();
+    final target = terminalFontFor(fontSize * (pts[0] - pts[1]).distance / start);
+    _pinchScale.value = target / fontSize;
+    // The first finger also drives the terminal's scrolling; hold it still while pinching.
+    if (scroll.hasClients && scroll.offset != _pinchScrollOffset) scroll.jumpTo(_pinchScrollOffset);
+  }
+
+  void _pointerUp(PointerEvent e) {
+    _pointers.remove(e.pointer);
+    if (_pointers.length < 2 && _pinchStartDistance != null) {
+      _pinchStartDistance = null;
+      // Apply once: every font change resizes the pty, which makes TUIs redraw.
+      _setFont(fontSize * _pinchScale.value);
+      _pinchScale.value = 1;
+      _saveFont();
+      controller.clearSelection();
+    }
+  }
+
+  Widget _selectionBar(Palette p, ShellSession s) {
+    Widget action(String label, IconData icon, VoidCallback onTap) => InkWell(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: p.inverse),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(color: p.inverse, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Material(
+      color: p.text,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          action(tr('Copy'), LucideIcons.copy, () => _copy(s)),
+          action(tr('Select all'), LucideIcons.textSelect, () => _selectAll(s)),
+          action(tr('Paste'), LucideIcons.clipboardPaste, () => _paste(s)),
+          IconButton(
+            tooltip: tr('Close'),
+            visualDensity: VisualDensity.compact,
+            onPressed: controller.clearSelection,
+            icon: Icon(LucideIcons.x, size: 16, color: p.inverse),
+          ),
+        ],
+      ),
     );
   }
 
@@ -516,21 +744,21 @@ class _TerminalScreenState extends State<TerminalScreen> {
                   },
                 ),
               PopupMenuButton<String>(
-                tooltip: 'New tab',
+                tooltip: tr('New tab'),
                 position: PopupMenuPosition.under,
                 onSelected: (v) => switch (v) {
                   'linux' => _newTab(command: 'box', linux: true),
                   'tests' => _runTests(),
                   _ => _newTab(),
                 },
-                itemBuilder: (context) => const [
+                itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'android',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(LucideIcons.smartphone, size: 18),
-                      title: Text('Android shell'),
+                      title: Text(tr('Android shell')),
                     ),
                   ),
                   PopupMenuItem(
@@ -539,7 +767,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(LucideIcons.box, size: 18),
-                      title: Text('Linux shell (box)'),
+                      title: Text(tr('Linux shell (box)')),
                     ),
                   ),
                   PopupMenuItem(
@@ -548,7 +776,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(LucideIcons.flaskConical, size: 18),
-                      title: Text('Run tests'),
+                      title: Text(tr('Run tests')),
                     ),
                   ),
                 ],
@@ -632,6 +860,8 @@ class _KeyBar extends StatelessWidget {
     required this.onText,
     required this.onPaste,
     required this.onHistory,
+    required this.onZoomOut,
+    required this.onZoomIn,
   });
   final bool ctrl;
   final VoidCallback onCtrl;
@@ -639,6 +869,8 @@ class _KeyBar extends StatelessWidget {
   final void Function(String) onText;
   final VoidCallback onPaste;
   final VoidCallback onHistory;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomIn;
 
   @override
   Widget build(BuildContext context) {
@@ -681,6 +913,8 @@ class _KeyBar extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
+              key('A−', onZoomOut),
+              key('A+', onZoomIn),
               key('esc', () => onKey(TerminalKey.escape)),
               key('tab', () => onKey(TerminalKey.tab)),
               key('ctrl', onCtrl, active: ctrl),
