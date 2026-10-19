@@ -158,13 +158,17 @@ class SmoothPageTransitions extends PageTransitionsBuilder {
         var scale = 1.0;
         var radius = 0.0;
         var opacity = 1.0;
+        // Darkens a page that is behind another one; cheaper than fading the whole page, and nothing shows through.
+        var scrim = 0.0;
+        var shadow = 0.0;
         if (g != null && g.route == route) {
-          // This page follows the back gesture.
+          // This page follows the back gesture, lifted off the page it reveals.
           final dir = g.edge == SwipeEdge.left ? 1.0 : -1.0;
           final shift = math.max(0.0, width / 20 - 8);
           final drag = 1 - (g.committed ? g.committedAt : animation.value);
           scale = 1 - 0.1 * drag;
           radius = 28 * math.min(1.0, drag * 4);
+          shadow = math.min(1.0, drag * 4);
           dx = dir * shift * drag;
           if (g.committed) {
             final c = g.committedAt <= 0 ? 1.0 : (1 - animation.value / g.committedAt).clamp(0.0, 1.0);
@@ -173,26 +177,48 @@ class SmoothPageTransitions extends PageTransitionsBuilder {
             opacity = 1 - Curves.easeOut.transform(c);
           }
         } else {
-          // The page underneath stays put while a back gesture reveals it.
+          final u = under.value;
           if (g == null) {
-            final u = under.value;
+            // Underneath a page being pushed or popped: eases back.
             dx = -0.08 * width * u;
-            opacity = 1 - 0.4 * u;
+            scrim = 0.18 * u;
+          } else {
+            // Revealed by a back gesture: stays put, brightening as the page above moves away.
+            scrim = 0.12 * secondaryAnimation.value;
           }
-          final e = enter.value;
-          dx += 0.18 * width * (1 - e);
-          opacity *= e;
+          // Coming in: slides from the right, fading in over the first part only, so two pages never blend.
+          dx += 0.18 * width * (1 - enter.value);
+          opacity = (animation.value / 0.4).clamp(0.0, 1.0);
         }
+        final dark = Theme.of(context).brightness == Brightness.dark;
         return Transform.translate(
           offset: Offset(dx, 0),
           child: Transform.scale(
             scale: scale,
             child: Opacity(
               opacity: opacity.clamp(0.0, 1.0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radius),
-                clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
-                child: child,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radius),
+                  boxShadow: shadow > 0
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: (dark ? 0.5 : 0.22) * shadow),
+                            blurRadius: 24,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
+                  child: DecoratedBox(
+                    position: DecorationPosition.foreground,
+                    decoration: BoxDecoration(color: scrim > 0 ? Colors.black.withValues(alpha: scrim) : null),
+                    child: child,
+                  ),
+                ),
               ),
             ),
           ),

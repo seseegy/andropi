@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'ci_panel.dart';
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Runs [task] in a bottom sheet that streams its output, then shows either
@@ -49,15 +51,55 @@ class _TaskSheetState<T> extends State<_TaskSheet<T>> {
           if (mounted) setState(() => ci = c);
         })
         .then(
-          (r) => setState(() {
-            running = false;
-            result = r;
-          }),
-          onError: (Object e) => setState(() {
-            running = false;
-            error = e;
-          }),
+          (r) {
+            if (!mounted) return _finishedHidden(r, null);
+            setState(() {
+              running = false;
+              result = r;
+            });
+          },
+          onError: (Object e) {
+            if (!mounted) return _finishedHidden(null, e);
+            setState(() {
+              running = false;
+              error = e;
+            });
+          },
         );
+  }
+
+  /// Where to report a task that was hidden while it ran.
+  ScaffoldMessengerState? _messenger;
+
+  /// Closes the sheet; the task carries on and reports when it ends.
+  void _hide() {
+    _messenger = ScaffoldMessenger.maybeOf(context);
+    // Lift the back guard first (it vetoes pops too), then close.
+    setState(() => _hiding = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  bool _hiding = false;
+
+  void _finishedHidden(T? r, Object? e) {
+    final messenger = _messenger;
+    if (messenger == null) return;
+    final url = r is String && r.startsWith('http') ? r : null;
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          e != null
+              ? '${widget.title}: ${tr('failed')}. ${e.toString().split('\n').first}'
+              : '${widget.title}: ${tr('done')}${url != null ? ' · $url' : ''}',
+        ),
+        action: url != null && widget.openUrl != null
+            ? SnackBarAction(label: tr('Open'), onPressed: () => widget.openUrl!(url))
+            : null,
+      ),
+    );
   }
 
   void _log(String line) {
@@ -93,65 +135,80 @@ class _TaskSheetState<T> extends State<_TaskSheet<T>> {
         ? Icon(LucideIcons.circleAlert, size: 20, color: p.danger)
         : Icon(LucideIcons.circleCheck, size: 20, color: p.success);
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                status,
-                const SizedBox(width: 10),
-                Expanded(child: Text(widget.title, style: text.titleMedium)),
-              ],
-            ),
-            const SizedBox(height: 14),
-            if (ci != null)
-              ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.4),
-                child: SingleChildScrollView(
-                  child: CiPanel(snapshot: ci!, onOpen: widget.openUrl),
+    // Back can't close the sheet while the task runs: it would keep going out of sight, and its result be lost.
+    return PopScope(
+      canPop: !running || _hiding,
+      // A snackbar would be hidden behind this sheet; a tap of feedback says "not yet" (Hide closes it).
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) HapticFeedback.selectionClick();
+      },
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + MediaQuery.viewInsetsOf(context).bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  status,
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(widget.title, style: text.titleMedium)),
+                  // Long tasks (waiting on CI, a slow server) shouldn't hold the app hostage.
+                  if (running)
+                    TextButton.icon(
+                      onPressed: _hide,
+                      icon: const Icon(LucideIcons.minimize2, size: 16),
+                      label: Text(tr('Hide')),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              if (ci != null)
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.4),
+                  child: SingleChildScrollView(
+                    child: CiPanel(snapshot: ci!, onOpen: widget.openUrl),
+                  ),
+                ),
+              Container(
+                height: ci != null ? 140 : 220,
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: p.border),
+                ),
+                child: ListView.builder(
+                  controller: scroll,
+                  padding: const EdgeInsets.all(12),
+                  itemCount: lines.length + (error != null ? 1 : 0),
+                  itemBuilder: (context, i) {
+                    final isError = i == lines.length;
+                    // The error repeats the command's last output; the log above has it.
+                    final message = lines.isEmpty ? error.toString() : error.toString().split('\n').first;
+                    return Text(
+                      isError ? message : lines[i],
+                      style: TextStyle(
+                        fontFamily: mono,
+                        fontSize: 11.5,
+                        height: 1.5,
+                        color: isError ? p.danger : p.muted,
+                      ),
+                    );
+                  },
                 ),
               ),
-            Container(
-              height: ci != null ? 140 : 220,
-              decoration: BoxDecoration(
-                color: p.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: p.border),
-              ),
-              child: ListView.builder(
-                controller: scroll,
-                padding: const EdgeInsets.all(12),
-                itemCount: lines.length + (error != null ? 1 : 0),
-                itemBuilder: (context, i) {
-                  final isError = i == lines.length;
-                  // The error repeats the command's last output; the log above has it.
-                  final message = lines.isEmpty ? error.toString() : error.toString().split('\n').first;
-                  return Text(
-                    isError ? message : lines[i],
-                    style: TextStyle(
-                      fontFamily: mono,
-                      fontSize: 11.5,
-                      height: 1.5,
-                      color: isError ? p.danger : p.muted,
-                    ),
-                  );
-                },
-              ),
-            ),
-            if (!running && error == null && result != null && widget.onDone != null) ...[
+              if (!running && error == null && result != null && widget.onDone != null) ...[
+                const SizedBox(height: 14),
+                widget.onDone!(context, result as T),
+              ],
               const SizedBox(height: 14),
-              widget.onDone!(context, result as T),
+              FilledButton(
+                onPressed: running ? null : () => Navigator.of(context).pop(error == null ? result : null),
+                child: Text(running ? 'Working…' : (error == null ? 'Done' : 'Close')),
+              ),
             ],
-            const SizedBox(height: 14),
-            FilledButton(
-              onPressed: running ? null : () => Navigator.of(context).pop(error == null ? result : null),
-              child: Text(running ? 'Working…' : (error == null ? 'Done' : 'Close')),
-            ),
-          ],
+          ),
         ),
       ),
     );

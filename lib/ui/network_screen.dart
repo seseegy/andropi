@@ -22,6 +22,24 @@ class _NetworkScreenState extends State<NetworkScreen> {
   final customUrl = TextEditingController();
   bool saving = false;
 
+  /// Custom DoH picked but not saved yet: it only takes effect once it has a URL.
+  bool pickingCustom = false;
+
+  /// Saves the custom DoH URL, which has to be an https address.
+  Future<void> _saveCustom() async {
+    final url = customUrl.text.trim();
+    if (!RegExp(r'^https://\S+$').hasMatch(url)) {
+      // Keep the field open so it can be corrected.
+      setState(() => pickingCustom = true);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Enter an https:// DNS-over-HTTPS address'))));
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    await _save({'dns': 'custom', 'dnsUrl': url}, done: tr('DNS updated'));
+    if (mounted) setState(() => pickingCustom = false);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -86,47 +104,64 @@ class _NetworkScreenState extends State<NetworkScreen> {
                           color: const Color(0xFFF38020),
                           title: tr('Cloudflare'),
                           subtitle: '1.1.1.1 over HTTPS · recommended',
-                          selected: s.dns == 'cloudflare',
-                          onTap: () => _save({'dns': 'cloudflare'}),
+                          selected: s.dns == 'cloudflare' && !pickingCustom,
+                          onTap: () {
+                            setState(() => pickingCustom = false);
+                            _save({'dns': 'cloudflare'});
+                          },
                         ),
                         _DnsOption(
                           icon: SimpleIcons.google,
                           color: const Color(0xFF4285F4),
                           title: tr('Google'),
                           subtitle: '8.8.8.8 over HTTPS',
-                          selected: s.dns == 'google',
-                          onTap: () => _save({'dns': 'google'}),
+                          selected: s.dns == 'google' && !pickingCustom,
+                          onTap: () {
+                            setState(() => pickingCustom = false);
+                            _save({'dns': 'google'});
+                          },
                         ),
                         _DnsOption(
                           icon: LucideIcons.link,
                           color: p.accent,
                           title: tr('Custom DoH'),
                           subtitle: tr('Any JSON DNS-over-HTTPS endpoint'),
-                          selected: s.dns == 'custom',
-                          onTap: () => _save({'dns': 'custom', 'dnsUrl': customUrl.text}),
+                          selected: s.dns == 'custom' || pickingCustom,
+                          // Without a URL yet, only open the field; saving an empty one would quietly mean System.
+                          onTap: () =>
+                              customUrl.text.trim().isEmpty ? setState(() => pickingCustom = true) : _saveCustom(),
                         ),
                         _DnsOption(
                           icon: LucideIcons.smartphone,
                           color: p.muted,
                           title: tr('System'),
                           subtitle: tr('Whatever the phone and network use'),
-                          selected: s.dns == 'system',
-                          onTap: () => _save({'dns': 'system'}),
+                          selected: s.dns == 'system' && !pickingCustom,
+                          onTap: () {
+                            setState(() => pickingCustom = false);
+                            _save({'dns': 'system'});
+                          },
                         ),
                       ],
                     ),
-                    if (s.dns == 'custom') ...[
+                    if (s.dns == 'custom' || pickingCustom) ...[
                       const SizedBox(height: 12),
                       TextField(
                         controller: customUrl,
+                        autofocus: pickingCustom,
                         autocorrect: false,
                         keyboardType: TextInputType.url,
                         style: const TextStyle(fontFamily: mono, fontSize: 13.5),
                         decoration: InputDecoration(
                           labelText: tr('DoH URL'),
                           hintText: 'https://dns.example/dns-query',
+                          suffixIcon: IconButton(
+                            tooltip: tr('Save'),
+                            icon: const Icon(LucideIcons.check, size: 18),
+                            onPressed: saving ? null : _saveCustom,
+                          ),
                         ),
-                        onSubmitted: (v) => _save({'dns': 'custom', 'dnsUrl': v}, done: 'DNS updated'),
+                        onSubmitted: (_) => _saveCustom(),
                       ),
                     ],
                     const SizedBox(height: 10),
@@ -175,7 +210,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                       integrations: it,
                       onLink: () => widget.agent.client.openUrl('https://app.s1.dev'),
                       checkCredits: true,
-                      footer: SettingsGroup(
+                      footer: _InsetGroup(
                         children: [
                           _FeatureSwitch(
                             icon: LucideIcons.search,
@@ -281,6 +316,29 @@ List<String> parseApiKeys(String text) {
   return keys;
 }
 
+/// A group of rows inside a card: a shade darker than the card, so it reads as one group.
+class _InsetGroup extends StatelessWidget {
+  const _InsetGroup({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      decoration: BoxDecoration(color: p.raised, borderRadius: BorderRadius.circular(18)),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 1, indent: 66, endIndent: 16, color: p.border),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _FeatureSwitch extends StatelessWidget {
   const _FeatureSwitch({
     required this.icon,
@@ -377,10 +435,32 @@ class _KeyListState extends State<_KeyList> {
     input.clear();
     credits = null;
     setState(() => adding = false);
-    _snack(added == 0 ? tr('These keys are already saved') : tr('{n} keys added').replaceAll('{n}', '$added'));
+    _snack(
+      added == 0
+          ? tr('These keys are already saved')
+          : added == 1
+          ? tr('1 key added')
+          : tr('{n} keys added').replaceAll('{n}', '$added'),
+    );
   });
 
-  Future<void> _remove(int index, String masked) => _run(() async {
+  /// Removes after a confirmation: the key is only shown masked, so it can't be copied back afterwards.
+  Future<void> _remove(int index, String masked) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Remove key {key}?').replaceAll('{key}', masked)),
+        content: Text(tr('To use it again you will need to paste it again.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Remove'))),
+        ],
+      ),
+    );
+    if (ok == true && mounted) await _removeNow(index, masked);
+  }
+
+  Future<void> _removeNow(int index, String masked) => _run(() async {
     await widget.integrations.removeSearchKey(widget.service, index);
     credits = null;
     _snack(tr('Key {key} removed').replaceAll('{key}', masked));
@@ -445,7 +525,12 @@ class _KeyListState extends State<_KeyList> {
                         ? Text(
                             credits![i].credits != null
                                 ? tr('{n} credits').replaceAll('{n}', '${credits![i].credits}')
-                                : credits![i].error ?? '',
+                                : switch (credits![i].error) {
+                                    'invalid_key' => tr('Invalid key'),
+                                    'no_credits' => tr('Out of credits'),
+                                    'rate_limited' => tr('Rate limited, try again soon'),
+                                    final e => e ?? '',
+                                  },
                             textAlign: TextAlign.end,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

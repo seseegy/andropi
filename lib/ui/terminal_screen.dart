@@ -283,9 +283,32 @@ class _TerminalScreenState extends State<TerminalScreen> {
     return s;
   }
 
+  /// Closes tab [i]; a shell that is still running is only killed once confirmed.
+  Future<void> _confirmClose(int i) async {
+    final s = sessions[i];
+    if (!s.exited) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(tr('Close this tab?')),
+          content: Text(tr('Its shell is still running and will be stopped.')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Close tab'))),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final index = sessions.indexOf(s);
+    if (index >= 0) _close(index);
+  }
+
   void _close(int i) {
     final s = sessions.removeAt(i);
     s.kill();
+    // Closing a tab left of the open one shifts it down; keep the same tab open.
+    if (i < ShellSession.selected) ShellSession.selected--;
     if (ShellSession.selected >= sessions.length) ShellSession.selected = sessions.length - 1;
     if (ShellSession.selected < 0) ShellSession.selected = 0;
     ShellSession.changes.value++;
@@ -360,18 +383,27 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final name = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final h in hosts)
-              ListTile(
-                leading: const Icon(LucideIcons.server),
-                title: Text(h.name),
-                subtitle: Text(h.address, style: const TextStyle(fontFamily: mono, fontSize: 12)),
-                onTap: () => Navigator.of(context).pop(h.name),
-              ),
-            const SizedBox(height: 8),
-          ],
+        // Scrolls once there are more servers than fit.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(bottom: 8),
+            children: [
+              for (final h in hosts)
+                ListTile(
+                  leading: const Icon(LucideIcons.server),
+                  title: Text(h.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    h.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: mono, fontSize: 12),
+                  ),
+                  onTap: () => Navigator.of(context).pop(h.name),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -573,23 +605,29 @@ class _TerminalScreenState extends State<TerminalScreen> {
   void _saveFont() => Appearance.instance.setTerminalFontSize(fontSize);
 
   Widget _selectionBar(Palette p, ShellSession s) {
-    Widget action(String label, IconData icon, VoidCallback onTap) => InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: p.inverse),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(color: p.inverse, fontSize: 13, fontWeight: FontWeight.w500),
+    // Semantics so screen readers announce these as buttons, not loose text.
+    Widget action(String label, IconData icon, VoidCallback onTap) => MergeSemantics(
+      child: Semantics(
+        button: true,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: p.inverse),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(color: p.inverse, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -665,12 +703,18 @@ class _TerminalScreenState extends State<TerminalScreen> {
                               decoration: s.exited ? TextDecoration.lineThrough : null,
                             ),
                           ),
-                          InkResponse(
-                            radius: 14,
-                            onTap: () => _close(i),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
-                              child: Icon(LucideIcons.x, size: 13, color: on ? p.inverse : p.muted),
+                          // A full-height target, so it is hard to miss and hard to hit by accident.
+                          Semantics(
+                            button: true,
+                            label: tr('Close tab'),
+                            child: InkResponse(
+                              radius: 18,
+                              onTap: () => _confirmClose(i),
+                              child: SizedBox(
+                                width: 34,
+                                height: 32,
+                                child: Icon(LucideIcons.x, size: 14, color: on ? p.inverse : p.muted),
+                              ),
                             ),
                           ),
                         ],

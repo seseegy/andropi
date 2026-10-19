@@ -8,7 +8,7 @@
  * (crawl) and take screenshots.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Type } from "typebox";
 import { KeyError, withKeys } from "./keyring.js";
@@ -40,11 +40,13 @@ const S1 = "https://api.search1api.com";
 const s1KeyProblem = (status: number) => status === 401 || status === 402 || status === 429;
 
 async function s1Request(path: string, key: string, body: unknown, signal?: AbortSignal) {
+	// A stalled mobile connection must not hang the agent: a minute is plenty, even for a full-page screenshot.
+	const timeout = AbortSignal.timeout(60_000);
 	const res = await fetch(`${S1}${path}`, {
 		method: "POST",
 		headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
 		body: JSON.stringify(body),
-		signal,
+		signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
 	});
 	if (!res.ok) {
 		const raw = await res.text().catch(() => "");
@@ -104,7 +106,13 @@ export async function s1Screenshot(url: string, opts: ScreenshotOptions, keys: s
 		keys,
 		async (key) => {
 			const res = await s1Request("/screenshot", key, { url, format: "png", ...opts }, signal);
-			return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: res.headers.get("content-type") ?? "image/png" };
+			const type = res.headers.get("content-type") ?? "image/png";
+			// An error page answered with 200 must not be saved and shown as an image.
+			if (!type.startsWith("image/")) {
+				const text = (await res.text().catch(() => "")).slice(0, 200);
+				throw new Error(`Search1API returned no image${text ? `: ${text}` : ""}`);
+			}
+			return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: type.split(";")[0] };
 		},
 		s1KeyProblem,
 	);
@@ -115,8 +123,15 @@ export async function s1Usage(keys: string[]) {
 	return Promise.all(
 		keys.map(async (key) => {
 			try {
-				const res = await fetch(`${S1}/usage`, { headers: { Authorization: `Bearer ${key}` } });
-				if (!res.ok) return { usage: null, error: `HTTP ${res.status}` };
+				const res = await fetch(`${S1}/usage`, {
+					headers: { Authorization: `Bearer ${key}` },
+					signal: AbortSignal.timeout(20_000),
+				});
+				// Known causes as codes the app words in the user's language.
+				if (!res.ok) {
+					const error = { 401: "invalid_key", 402: "no_credits", 429: "rate_limited" }[res.status] ?? `HTTP ${res.status}`;
+					return { usage: null, error };
+				}
 				return { usage: Number(((await res.json()) as any).usage ?? 0), error: null };
 			} catch (e) {
 				return { usage: null, error: (e as Error).message };
@@ -438,6 +453,8 @@ export function webTools(keys: () => SearchKeys, cwd: () => string) {
 				);
 				const dir = join(cwd(), ".screenshots");
 				mkdirSync(dir, { recursive: true });
+				// Keep screenshots out of git (the folder ignores itself); deploys already skip dot-folders.
+				if (!existsSync(join(dir, ".gitignore"))) writeFileSync(join(dir, ".gitignore"), "*\n");
 				const host = (() => {
 					try {
 						return new URL(url).hostname.replace(/[^\w.-]/g, "_");

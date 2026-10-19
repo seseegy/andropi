@@ -11,7 +11,7 @@ import 'task_log.dart';
 import 'i18n.dart';
 import 'theme.dart';
 
-/// GitHub, Vercel, the device SSH key and saved servers.
+/// GitHub, Vercel, Cloudflare, the device SSH key and saved servers.
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key, required this.agent});
   final AgentController agent;
@@ -29,7 +29,23 @@ class _AccountsScreenState extends State<AccountsScreen> {
     it.refresh();
   }
 
-  void _snack(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  void _snack(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(message))));
+
+  /// Disconnects after a confirmation: a token can't be read back, so reconnecting means pasting it again.
+  Future<void> _disconnect(String service, Future<void> Function() action) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Disconnect {service}?').replaceAll('{service}', service)),
+        content: Text(tr('Its token is removed from this device. To reconnect you will need to paste a token again.')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Disconnect'))),
+        ],
+      ),
+    );
+    if (ok == true) await _guard(action, success: tr('{service} disconnected').replaceAll('{service}', service));
+  }
 
   Future<void> _guard(Future<void> Function() action, {String? success}) async {
     try {
@@ -83,7 +99,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           icon: SimpleIcons.github,
                           title: it.github!.name ?? it.github!.login,
                           subtitle: '@${it.github!.login} · git push and Pages enabled',
-                          onDisconnect: () => _guard(it.githubLogout),
+                          onDisconnect: () => _disconnect('GitHub', it.githubLogout),
                         ),
                   _Header(tr('Vercel')),
                   it.vercelUser == null
@@ -100,8 +116,49 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           icon: SimpleIcons.vercel,
                           title: it.vercelUser!,
                           subtitle: tr('Deploys enabled'),
-                          onDisconnect: () => _guard(it.vercelLogout),
+                          onDisconnect: () => _disconnect('Vercel', it.vercelLogout),
                         ),
+                  _Header(tr('Cloudflare')),
+                  if (!it.cloudflareConnected)
+                    _TokenConnect(
+                      icon: SimpleIcons.cloudflare,
+                      title: tr('Connect Cloudflare'),
+                      body:
+                          'Deploy to Workers and Pages from the chat. Create an API token with the '
+                          '"Edit Cloudflare Workers" template (it covers Pages too) and paste it here.',
+                      linkLabel: 'Create a token',
+                      onLink: () => widget.agent.client.openUrl('https://dash.cloudflare.com/profile/api-tokens'),
+                      hint: 'Cloudflare API token',
+                      onConnect: (t) => _guard(() => it.cloudflareLogin(t), success: 'Cloudflare connected'),
+                    )
+                  else
+                    _Connected(
+                      icon: SimpleIcons.cloudflare,
+                      title: it.cloudflareAccountName ?? 'Cloudflare',
+                      subtitle: tr('Workers and Pages deploys enabled'),
+                      onDisconnect: () => _disconnect('Cloudflare', it.cloudflareLogout),
+                      footer: it.cloudflareAccounts.length > 1
+                          ? DropdownButtonFormField<String>(
+                              initialValue: it.cloudflareAccountId,
+                              isExpanded: true,
+                              decoration: InputDecoration(labelText: tr('Deploy to account')),
+                              items: [
+                                for (final a in it.cloudflareAccounts)
+                                  DropdownMenuItem(
+                                    value: a.id,
+                                    child: Text(a.name, overflow: TextOverflow.ellipsis),
+                                  ),
+                              ],
+                              onChanged: (id) {
+                                if (id == null) return;
+                                _guard(
+                                  () => it.cloudflareSelectAccount(id),
+                                  success: tr('Deploys now go to this account'),
+                                );
+                              },
+                            )
+                          : null,
+                    ),
                   _Header(tr('SSH key')),
                   _SshKeyCard(integrations: it, openUrl: widget.agent.client.openUrl),
                   _Header(
@@ -174,16 +231,8 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: p.border),
-      ),
-      child: child,
-    );
+    // The same card as the rest of the app (Web & DNS, Settings).
+    return SurfaceCard(padding: const EdgeInsets.all(16), child: child);
   }
 }
 
@@ -389,18 +438,18 @@ class _TokenConnectState extends State<_TokenConnect> {
             children: [
               IconTile(icon: widget.icon, color: p.text, size: 36),
               const SizedBox(width: 10),
-              Text(widget.title, style: text.titleSmall),
+              Text(tr(widget.title), style: text.titleSmall),
             ],
           ),
           const SizedBox(height: 8),
-          Text(widget.body, style: text.bodySmall),
+          Text(tr(widget.body), style: text.bodySmall),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               onPressed: widget.onLink,
               style: TextButton.styleFrom(padding: EdgeInsets.zero, foregroundColor: p.text),
               icon: const Icon(LucideIcons.externalLink, size: 15),
-              label: Text(widget.linkLabel),
+              label: Text(tr(widget.linkLabel)),
             ),
           ),
           TextField(
@@ -408,7 +457,7 @@ class _TokenConnectState extends State<_TokenConnect> {
             obscureText: true,
             autocorrect: false,
             enableSuggestions: false,
-            decoration: InputDecoration(hintText: widget.hint),
+            decoration: InputDecoration(hintText: tr(widget.hint)),
             onSubmitted: (_) => _connect(),
           ),
           const SizedBox(height: 10),
@@ -431,6 +480,7 @@ class _Connected extends StatelessWidget {
     required this.subtitle,
     required this.onDisconnect,
     this.avatarUrl,
+    this.footer,
   });
   final IconData icon;
   final String title;
@@ -438,35 +488,44 @@ class _Connected extends StatelessWidget {
   final VoidCallback onDisconnect;
   final String? avatarUrl;
 
+  /// Shown under the account, inside the card (e.g. which Cloudflare account deploys go to).
+  final Widget? footer;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     return _Card(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: p.raised,
-            foregroundImage: avatarUrl == null ? null : NetworkImage(avatarUrl!),
-            child: Icon(icon, size: 18, color: p.text),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: p.raised,
+                foregroundImage: avatarUrl == null ? null : NetworkImage(avatarUrl!),
+                child: Icon(icon, size: 18, color: p.text),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: text.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: text.bodySmall),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: onDisconnect,
+                style: TextButton.styleFrom(foregroundColor: p.danger),
+                child: Text(tr('Disconnect')),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: text.titleSmall),
-                const SizedBox(height: 2),
-                Text(subtitle, style: text.bodySmall),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: onDisconnect,
-            style: TextButton.styleFrom(foregroundColor: p.danger),
-            child: Text(tr('Disconnect')),
-          ),
+          if (footer != null) ...[const SizedBox(height: 12), footer!],
         ],
       ),
     );
