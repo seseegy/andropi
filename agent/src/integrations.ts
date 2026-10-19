@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
+import { Cloudflare, type CloudflareAccount } from "./cloudflare.js";
 import { configureDns, type DnsMode } from "./dns.js";
 import { maskKey, parseKeys } from "./keyring.js";
 import { readSecureJson, writeSecureJson } from "./secure.js";
@@ -27,6 +28,7 @@ export interface SshHost {
 interface Store {
 	github?: { token: string; login: string; name: string | null; email: string; avatarUrl: string };
 	vercel?: { token: string; username: string };
+	cloudflare?: { token: string; accounts: CloudflareAccount[]; accountId: string };
 	sshHosts: SshHost[];
 	settings?: AppSettings;
 }
@@ -74,7 +76,7 @@ export interface CiRun extends CiStep {
 	jobs: CiJob[];
 }
 export interface CiSnapshot {
-	provider: "github" | "vercel";
+	provider: "github" | "vercel" | "cloudflare";
 	runs: CiRun[];
 }
 
@@ -188,14 +190,24 @@ export class Integrations {
 		}
 		if (this.store.vercel) process.env.VERCEL_TOKEN = this.store.vercel.token;
 		else delete process.env.VERCEL_TOKEN;
+		// What wrangler reads, so the agent can use it without logging in.
+		const cf = this.store.cloudflare;
+		if (cf) {
+			process.env.CLOUDFLARE_API_TOKEN = cf.token;
+			process.env.CLOUDFLARE_ACCOUNT_ID = cf.accountId;
+		} else {
+			delete process.env.CLOUDFLARE_API_TOKEN;
+			delete process.env.CLOUDFLARE_ACCOUNT_ID;
+		}
 	}
 
 	summary() {
-		const { github, vercel, sshHosts } = this.store;
+		const { github, vercel, cloudflare, sshHosts } = this.store;
 		const pub = join(this.home, ".ssh", "id_ed25519.pub");
 		return {
 			github: github ? { login: github.login, name: github.name, avatarUrl: github.avatarUrl } : null,
 			vercel: vercel ? { username: vercel.username } : null,
+			cloudflare: cloudflare ? { accounts: cloudflare.accounts, accountId: cloudflare.accountId } : null,
 			ssh: { publicKey: existsSync(pub) ? readFileSync(pub, "utf8").trim() : null, hosts: sshHosts },
 		};
 	}
@@ -488,15 +500,92 @@ export class Integrations {
 	}
 
 	// -------------------------------------------------------------------------
+	// Cloudflare (cloudflare.ts)
+
+	async cloudflareLogin(token: string) {
+		token = token.trim();
+		const accounts = await Cloudflare.accounts(token);
+		this.store.cloudflare = { token, accounts, accountId: accounts[0].id };
+		this.save();
+		return this.summary();
+	}
+
+	cloudflareSelectAccount(accountId: string) {
+		const cf = this.store.cloudflare;
+		if (!cf) throw new Error("Not connected to Cloudflare");
+		if (!cf.accounts.some((a) => a.id === accountId)) throw new Error("Unknown Cloudflare account");
+		cf.accountId = accountId;
+		this.save();
+		return this.summary();
+	}
+
+	cloudflareLogout() {
+		delete this.store.cloudflare;
+		this.save();
+		return this.summary();
+	}
+
+	private cloudflare() {
+		const cf = this.store.cloudflare;
+		if (!cf) throw new Error("Not connected to Cloudflare");
+		return new Cloudflare(cf.token, cf.accountId);
+	}
+
+	/** Commands in the Linux container (wrangler and npm live there), when it is installed. */
+	private containerRunner() {
+		const rootfs = process.env.ANDROPI_ROOTFS;
+		const available = !!rootfs && existsSync(join(rootfs, "etc"));
+		return {
+			available,
+			run: async (cmd: string, args: string[], opts: { cwd: string; log?: Log }) => {
+				try {
+					return await run(cmd, args, opts);
+				} catch (e) {
+					const message = (e as Error).message;
+					if (/npx: (command )?not found|npx: not found|npm: not found/.test(message)) {
+						throw new Error("Node.js isn't installed in the Linux container. Ask the agent to install it (apt-get install -y nodejs npm), then deploy again.");
+					}
+					throw e;
+				}
+			},
+		};
+	}
+
+	/** `npm run build` (installing dependencies first if needed) in the container, before a deploy. */
+	private async build(root: string, log: Log) {
+		const container = this.containerRunner();
+		if (!container.available) {
+			throw new Error("Building needs the Linux container with Node.js (Settings > Linux container). Or build the project first and deploy its output folder.");
+		}
+		if (!existsSync(join(root, "package.json"))) throw new Error("No package.json to build");
+		log("Building (npm run build)…");
+		const install = existsSync(join(root, "node_modules")) ? "" : "npm install && ";
+		await container.run("box", ["-c", `${install}npm run build`], { cwd: root, log });
+	}
+
+	// -------------------------------------------------------------------------
 	// Deploy
 
 	async deploy(target: string, dir: string, options: Record<string, any>, log: Log) {
-		if (!existsSync(dir)) throw new Error(`No such folder: ${dir}`);
+		// A Cloudflare deploy may build its output folder first.
+		if (!existsSync(dir) && !(target.startsWith("cloudflare") && options.build)) throw new Error(`No such folder: ${dir}`);
 		switch (target) {
 			case "vercel":
 				return this.deployVercel(dir, options, log);
 			case "github_pages":
 				return this.deployPages(dir, options, log);
+			case "cloudflare_workers":
+			case "cloudflare_pages": {
+				const root = typeof options.root === "string" && existsSync(options.root) ? options.root : dir;
+				if (options.build) {
+					await this.build(root, log);
+					if (!existsSync(dir)) throw new Error(`The build didn't produce ${relative(root, dir) || dir}`);
+				}
+				const cf = this.cloudflare();
+				return target === "cloudflare_workers"
+					? cf.deployWorker(dir, root, { name: options.name, spa: !!options.spa }, log, this.containerRunner())
+					: cf.deployPages(dir, root, { project: options.name, preview: !!options.preview }, log, this.containerRunner());
+			}
 			case "ssh":
 				return this.deploySsh(dir, options, log);
 			default:

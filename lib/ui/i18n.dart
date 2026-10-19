@@ -292,6 +292,20 @@ const _id = <String, String>{
   'Save {n} keys': 'Simpan {n} key',
   'Saved': 'Tersimpan',
   'Remove key': 'Hapus key',
+  'Connect Cloudflare': 'Hubungkan Cloudflare',
+  'Workers and Pages deploys enabled': 'Deploy Workers dan Pages aktif',
+  'Deploy to account': 'Deploy ke akun',
+  'Workers': 'Workers',
+  'Pages': 'Pages',
+  'A static site, or a Worker with a wrangler config (code, assets and bindings).':
+      'Situs statis, atau Worker dengan config wrangler (kode, aset, dan binding).',
+  'A static site on pages.dev, with _worker.js or functions if it has them.':
+      'Situs statis di pages.dev, beserta _worker.js atau functions jika ada.',
+  'Single-page app': 'Single-page app',
+  'Unknown paths load index.html (React, Vue, Svelte routers)':
+      'Path yang tidak dikenal memuat index.html (router React, Vue, Svelte)',
+  'Build first': 'Build dulu',
+  'Runs npm run build in the Linux container': 'Menjalankan npm run build di container Linux',
   'Get a key': 'Dapatkan key',
   'Its API key and model list are deleted from this device.': 'API key dan daftar modelnya dihapus dari perangkat ini.',
   'Remove': 'Hapus',

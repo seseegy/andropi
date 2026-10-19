@@ -312,6 +312,9 @@ You are running inside AndroPI, an Android app, on the user's phone.
     https://github.com (clone, pull, push work directly). Use the REST API
     with curl for everything else (issues, PRs, repos).
   - Vercel: \`$VERCEL_TOKEN\` is set for the Vercel REST API.
+  - Cloudflare: \`$CLOUDFLARE_API_TOKEN\` and \`$CLOUDFLARE_ACCOUNT_ID\` are set,
+    so wrangler in the Linux container works without logging in
+    (\`box -c 'npx wrangler deploy'\`, D1/KV/R2 commands), as does the REST API.
   - SSH: saved servers are aliases in ~/.ssh/config, so \`ssh <name>\` works.
     The device key is ~/.ssh/id_ed25519.
 - Linux container: when the user has installed one (Debian or Alpine, via
@@ -726,6 +729,12 @@ async function handle(cmd: Command): Promise<unknown> {
 			return integrations.vercelLogin(cmd.token);
 		case "vercel_logout":
 			return integrations.vercelLogout();
+		case "cloudflare_login":
+			return integrations.cloudflareLogin(cmd.token);
+		case "cloudflare_account":
+			return integrations.cloudflareSelectAccount(cmd.accountId);
+		case "cloudflare_logout":
+			return integrations.cloudflareLogout();
 		case "ci_watch":
 			return integrations.watchProject(cwd, taskLog(cmd));
 		case "deploy":

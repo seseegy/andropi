@@ -10,25 +10,25 @@ import 'task_log.dart';
 import 'i18n.dart';
 import 'theme.dart';
 
-enum DeployTarget { vercel, githubPages, ssh }
+enum DeployTarget { vercel, cloudflare, githubPages, ssh }
 
 extension on DeployTarget {
-  String get id => switch (this) {
-    DeployTarget.vercel => 'vercel',
-    DeployTarget.githubPages => 'github_pages',
-    DeployTarget.ssh => 'ssh',
-  };
   String get label => switch (this) {
     DeployTarget.vercel => 'Vercel',
+    DeployTarget.cloudflare => 'Cloudflare',
     DeployTarget.githubPages => 'GitHub Pages',
     DeployTarget.ssh => 'SSH server',
   };
   IconData get icon => switch (this) {
     DeployTarget.vercel => SimpleIcons.vercel,
+    DeployTarget.cloudflare => SimpleIcons.cloudflare,
     DeployTarget.githubPages => SimpleIcons.github,
     DeployTarget.ssh => LucideIcons.server,
   };
 }
+
+/// Where on Cloudflare: Workers (static assets and code) or Pages.
+enum CloudflareMode { workers, pages }
 
 /// Deploys the current session's project folder (or a subfolder of it).
 Future<void> showDeploySheet(BuildContext context, AgentController agent) async {
@@ -43,10 +43,10 @@ Future<void> showDeploySheet(BuildContext context, AgentController agent) async 
   if (request == null || !context.mounted) return;
   await runWithLog<String?>(
     context,
-    title: '${tr('Deploying to')} ${request.target.label}',
+    title: '${tr('Deploying to')} ${request.label}',
     openUrl: agent.client.openUrl,
     task: (log, ci) => agent.integrations.deploy(
-      target: request.target.id,
+      target: request.target,
       dir: request.dir,
       options: request.options,
       onLine: log,
@@ -57,8 +57,11 @@ Future<void> showDeploySheet(BuildContext context, AgentController agent) async 
 }
 
 class _DeployRequest {
-  _DeployRequest(this.target, this.dir, this.options);
-  final DeployTarget target;
+  _DeployRequest(this.target, this.label, this.dir, this.options);
+
+  /// The host's deploy target id (integrations.ts).
+  final String target;
+  final String label;
   final String dir;
   final Map<String, dynamic> options;
 }
@@ -75,9 +78,12 @@ class _DeploySheetState extends State<_DeploySheet> {
   Integrations get it => widget.agent.integrations;
   late DeployTarget target = it.vercelUser != null
       ? DeployTarget.vercel
+      : it.cloudflareConnected
+      ? DeployTarget.cloudflare
       : it.github != null
       ? DeployTarget.githubPages
       : DeployTarget.ssh;
+  CloudflareMode mode = CloudflareMode.workers;
 
   final folder = TextEditingController();
   late final name = TextEditingController(text: _base(widget.agent.cwd));
@@ -86,6 +92,8 @@ class _DeploySheetState extends State<_DeploySheet> {
   late String? hostId = it.hosts.firstOrNull?.id;
   bool commit = true;
   bool production = true;
+  bool buildFirst = false;
+  bool spa = false;
 
   static String _base(String path) => path.split('/').where((s) => s.isNotEmpty).lastOrNull ?? 'site';
 
@@ -93,6 +101,7 @@ class _DeploySheetState extends State<_DeploySheet> {
 
   bool get connected => switch (target) {
     DeployTarget.vercel => it.vercelUser != null,
+    DeployTarget.cloudflare => it.cloudflareConnected,
     DeployTarget.githubPages => it.github != null,
     DeployTarget.ssh => it.hosts.isNotEmpty,
   };
@@ -110,13 +119,30 @@ class _DeploySheetState extends State<_DeploySheet> {
     return sub.isEmpty ? widget.agent.cwd : '${widget.agent.cwd}/$sub';
   }
 
+  String get _targetId => switch (target) {
+    DeployTarget.vercel => 'vercel',
+    DeployTarget.cloudflare => mode == CloudflareMode.workers ? 'cloudflare_workers' : 'cloudflare_pages',
+    DeployTarget.githubPages => 'github_pages',
+    DeployTarget.ssh => 'ssh',
+  };
+
+  String get _label => target == DeployTarget.cloudflare
+      ? (mode == CloudflareMode.workers ? 'Cloudflare Workers' : 'Cloudflare Pages')
+      : target.label;
+
   void _submit() {
     final options = switch (target) {
       DeployTarget.vercel => {'project': name.text.trim(), 'preview': !production},
+      DeployTarget.cloudflare => {
+        'name': name.text.trim(),
+        'root': widget.agent.cwd,
+        'build': buildFirst,
+        if (mode == CloudflareMode.workers) 'spa': spa else 'preview': !production,
+      },
       DeployTarget.githubPages => {'repo': name.text.trim(), 'message': message.text.trim(), 'commit': commit},
       DeployTarget.ssh => {'hostId': hostId, 'remotePath': remotePath.text.trim()},
     };
-    Navigator.of(context).pop(_DeployRequest(target, dir, options));
+    Navigator.of(context).pop(_DeployRequest(_targetId, _label, dir, options));
   }
 
   @override
@@ -150,19 +176,26 @@ class _DeploySheetState extends State<_DeploySheet> {
                 style: TextStyle(fontFamily: mono, fontSize: 12, color: p.muted),
               ),
               const SizedBox(height: 16),
-              SegmentedButton<DeployTarget>(
-                showSelectedIcon: false,
-                segments: [
+              // Chips wrap onto a second line on narrow screens, where four segments would not fit.
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
                   for (final t in DeployTarget.values)
-                    ButtonSegment(value: t, icon: Icon(t.icon, size: 16), label: Text(t.label)),
+                    ChoiceChip(
+                      avatar: Icon(t.icon, size: 16),
+                      label: Text(t.label),
+                      showCheckmark: false,
+                      selected: target == t,
+                      onSelected: (_) => setState(() => target = t),
+                    ),
                 ],
-                selected: {target},
-                onSelectionChanged: (s) => setState(() => target = s.first),
               ),
               const SizedBox(height: 16),
               if (!connected) ...[
                 Text(switch (target) {
                   DeployTarget.vercel => 'Connect Vercel to deploy there.',
+                  DeployTarget.cloudflare => 'Connect Cloudflare to deploy to Workers or Pages.',
                   DeployTarget.githubPages => 'Connect GitHub to publish with Pages.',
                   DeployTarget.ssh => 'Add a server first.',
                 }, style: text.bodySmall),
@@ -181,6 +214,27 @@ class _DeploySheetState extends State<_DeploySheet> {
                   child: Text(tr('Open accounts & servers')),
                 ),
               ] else ...[
+                if (target == DeployTarget.cloudflare) ...[
+                  SegmentedButton<CloudflareMode>(
+                    showSelectedIcon: false,
+                    segments: [
+                      ButtonSegment(value: CloudflareMode.workers, label: Text(tr('Workers'))),
+                      ButtonSegment(value: CloudflareMode.pages, label: Text(tr('Pages'))),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (s) => setState(() => mode = s.first),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tr(
+                      mode == CloudflareMode.workers
+                          ? 'A static site, or a Worker with a wrangler config (code, assets and bindings).'
+                          : 'A static site on pages.dev, with _worker.js or functions if it has them.',
+                    ),
+                    style: text.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 field(folder, 'Folder to deploy', hint: '.  (or dist, build, public…)'),
                 ...switch (target) {
                   DeployTarget.vercel => [
@@ -191,6 +245,36 @@ class _DeploySheetState extends State<_DeploySheet> {
                       subtitle: Text(tr('Off creates a preview deployment')),
                       value: production,
                       onChanged: (v) => setState(() => production = v),
+                    ),
+                  ],
+                  DeployTarget.cloudflare => [
+                    field(
+                      name,
+                      mode == CloudflareMode.workers ? 'Worker name' : 'Project name',
+                      helper: mode == CloudflareMode.workers ? 'A wrangler config\'s name wins' : null,
+                    ),
+                    if (mode == CloudflareMode.workers)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(tr('Single-page app')),
+                        subtitle: Text(tr('Unknown paths load index.html (React, Vue, Svelte routers)')),
+                        value: spa,
+                        onChanged: (v) => setState(() => spa = v),
+                      )
+                    else
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(tr('Production')),
+                        subtitle: Text(tr('Off creates a preview deployment')),
+                        value: production,
+                        onChanged: (v) => setState(() => production = v),
+                      ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(tr('Build first')),
+                      subtitle: Text(tr('Runs npm run build in the Linux container')),
+                      value: buildFirst,
+                      onChanged: (v) => setState(() => buildFirst = v),
                     ),
                   ],
                   DeployTarget.githubPages => [
@@ -231,7 +315,7 @@ class _DeploySheetState extends State<_DeploySheet> {
                 FilledButton.icon(
                   onPressed: _submit,
                   icon: const Icon(LucideIcons.rocket, size: 18),
-                  label: Text('${tr('Deploy to')} ${target.label}'),
+                  label: Text('${tr('Deploy to')} $_label'),
                 ),
               ],
             ],

@@ -164,6 +164,12 @@ class Integrations extends ChangeNotifier {
 
   GithubAccount? github;
   String? vercelUser;
+
+  /// The Cloudflare accounts the saved token reaches, and the one deploys go to.
+  List<({String id, String name})> cloudflareAccounts = const [];
+  String? cloudflareAccountId;
+  bool get cloudflareConnected => cloudflareAccountId != null;
+  String? get cloudflareAccountName => cloudflareAccounts.where((a) => a.id == cloudflareAccountId).firstOrNull?.name;
   String? publicKey;
   List<SshHost> hosts = const [];
   List<ProjectInfo> projects = const [];
@@ -177,6 +183,12 @@ class Integrations extends ChangeNotifier {
     final gh = s['github'];
     github = gh == null ? null : GithubAccount((gh as Map).cast<String, dynamic>());
     vercelUser = (s['vercel'] as Map?)?['username'] as String?;
+    final cf = s['cloudflare'] as Map?;
+    cloudflareAccounts = [
+      for (final a in (cf?['accounts'] as List? ?? const []).cast<Map>())
+        (id: a['id'] as String, name: a['name'] as String? ?? a['id'] as String),
+    ];
+    cloudflareAccountId = cf?['accountId'] as String?;
     final ssh = (s['ssh'] as Map).cast<String, dynamic>();
     publicKey = ssh['publicKey'] as String?;
     hosts = (ssh['hosts'] as List).map((e) => SshHost((e as Map).cast<String, dynamic>())).toList();
@@ -284,6 +296,12 @@ class Integrations extends ChangeNotifier {
   // Vercel
   Future<void> vercelLogin(String token) async => _apply(await client.call('vercel_login', {'token': token}));
   Future<void> vercelLogout() async => _apply(await client.call('vercel_logout'));
+
+  // Cloudflare
+  Future<void> cloudflareLogin(String token) async => _apply(await client.call('cloudflare_login', {'token': token}));
+  Future<void> cloudflareSelectAccount(String id) async =>
+      _apply(await client.call('cloudflare_account', {'accountId': id}));
+  Future<void> cloudflareLogout() async => _apply(await client.call('cloudflare_logout'));
 
   // SSH
   Future<String> ensureSshKey() async {

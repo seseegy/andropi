@@ -221,8 +221,9 @@ class _SettingsHubState extends State<SettingsHub> {
                     subtitle: [
                       if (it.github != null) 'GitHub @${it.github!.login}',
                       if (it.vercelUser != null) 'Vercel',
+                      if (it.cloudflareConnected) 'Cloudflare',
                       if (it.hosts.isNotEmpty) '${it.hosts.length} server${it.hosts.length == 1 ? '' : 's'}',
-                    ].join(' · ').ifEmpty('GitHub, Vercel, SSH keys and servers'),
+                    ].join(' · ').ifEmpty('GitHub, Vercel, Cloudflare, SSH keys and servers'),
                     onTap: () => _open(AccountsScreen(agent: agent)),
                   ),
                   SettingsRow(

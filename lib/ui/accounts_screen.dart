@@ -11,7 +11,7 @@ import 'task_log.dart';
 import 'i18n.dart';
 import 'theme.dart';
 
-/// GitHub, Vercel, the device SSH key and saved servers.
+/// GitHub, Vercel, Cloudflare, the device SSH key and saved servers.
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key, required this.agent});
   final AgentController agent;
@@ -102,6 +102,46 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           subtitle: tr('Deploys enabled'),
                           onDisconnect: () => _guard(it.vercelLogout),
                         ),
+                  _Header(tr('Cloudflare')),
+                  if (!it.cloudflareConnected)
+                    _TokenConnect(
+                      icon: SimpleIcons.cloudflare,
+                      title: tr('Connect Cloudflare'),
+                      body:
+                          'Deploy to Workers and Pages from the chat. Create an API token with the '
+                          '"Edit Cloudflare Workers" template (it covers Pages too) and paste it here.',
+                      linkLabel: 'Create a token',
+                      onLink: () => widget.agent.client.openUrl('https://dash.cloudflare.com/profile/api-tokens'),
+                      hint: 'Cloudflare API token',
+                      onConnect: (t) => _guard(() => it.cloudflareLogin(t), success: 'Cloudflare connected'),
+                    )
+                  else ...[
+                    _Connected(
+                      icon: SimpleIcons.cloudflare,
+                      title: it.cloudflareAccountName ?? 'Cloudflare',
+                      subtitle: tr('Workers and Pages deploys enabled'),
+                      onDisconnect: () => _guard(it.cloudflareLogout),
+                    ),
+                    if (it.cloudflareAccounts.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: DropdownButtonFormField<String>(
+                          initialValue: it.cloudflareAccountId,
+                          isExpanded: true,
+                          decoration: InputDecoration(labelText: tr('Deploy to account')),
+                          items: [
+                            for (final a in it.cloudflareAccounts)
+                              DropdownMenuItem(
+                                value: a.id,
+                                child: Text(a.name, overflow: TextOverflow.ellipsis),
+                              ),
+                          ],
+                          onChanged: (id) {
+                            if (id != null) _guard(() => it.cloudflareSelectAccount(id));
+                          },
+                        ),
+                      ),
+                  ],
                   _Header(tr('SSH key')),
                   _SshKeyCard(integrations: it, openUrl: widget.agent.client.openUrl),
                   _Header(
