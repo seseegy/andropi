@@ -120,10 +120,13 @@ class _ModelTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final selected = agent.model?.key == model.key;
+    String tokens(int n) =>
+        n >= 1000000 ? '${(n / 1000000).toStringAsFixed(n % 1000000 == 0 ? 0 : 1)}M' : '${(n / 1000).round()}k';
     final details = [
-      if (model.contextWindow != null && model.contextWindow! > 0) '${(model.contextWindow! / 1000).round()}k context',
-      if (model.reasoning) 'reasoning',
-      if (model.acceptsImages) 'vision',
+      if (model.contextWindow != null && model.contextWindow! > 0) '${tokens(model.contextWindow!)} ${tr('context')}',
+      if (model.maxTokens != null && model.maxTokens! > 0) '${tokens(model.maxTokens!)} ${tr('output')}',
+      if (model.reasoning) tr('reasoning'),
+      if (model.acceptsImages) tr('vision'),
     ].join('  ·  ');
     return ListTile(
       onTap: () async {

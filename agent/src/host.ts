@@ -120,6 +120,7 @@ function modelInfo(model: any) {
 		name: model.name ?? model.id,
 		reasoning: !!model.reasoning,
 		contextWindow: model.contextWindow ?? null,
+		maxTokens: model.maxTokens ?? null,
 		input: model.input ?? ["text"],
 	};
 }

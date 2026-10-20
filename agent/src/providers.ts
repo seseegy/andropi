@@ -15,7 +15,32 @@ import { readSecureJson, writeSecureJson } from "./secure.js";
 export const APIS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
 export type ProviderApi = (typeof APIS)[number];
 
-export type CustomModel = { id: string; name?: string; contextWindow?: number; reasoning?: boolean; input?: string[] };
+export type CustomModel = {
+	id: string;
+	name?: string;
+	contextWindow?: number;
+	/** Longest reply the model can write, in tokens. */
+	maxTokens?: number;
+	/** Thinks before answering; the app then offers a thinking effort. */
+	reasoning?: boolean;
+	/** False when thinking can't be turned off (only effort levels, no "off"). */
+	canDisableThinking?: boolean;
+	input?: string[];
+};
+
+/** A model as saved: only known fields, with sane types. */
+function cleanModel(m: any): CustomModel {
+	const num = (v: unknown) => (typeof v === "number" && v > 0 ? Math.round(v) : undefined);
+	return {
+		id: String(m.id ?? "").trim(),
+		...(typeof m.name === "string" && m.name.trim() && { name: m.name.trim() }),
+		...(num(m.contextWindow) && { contextWindow: num(m.contextWindow) }),
+		...(num(m.maxTokens) && { maxTokens: num(m.maxTokens) }),
+		...(m.reasoning === true && { reasoning: true }),
+		...(m.reasoning === true && m.canDisableThinking === false && { canDisableThinking: false }),
+		...(Array.isArray(m.input) && m.input.includes("image") && { input: ["text", "image"] }),
+	};
+}
 
 export type CustomProvider = {
 	id: string;
@@ -73,7 +98,7 @@ export class CustomProviders {
 		const baseUrl = cleanUrl(String(input.baseUrl ?? ""));
 		if (!/^https?:\/\/[^/]+/.test(baseUrl)) throw new Error("Enter a full base URL (https://…)");
 		const models = (input.models ?? [])
-			.map((m) => ({ ...m, id: String(m.id ?? "").trim() }))
+			.map(cleanModel)
 			.filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i);
 		if (!models.length) throw new Error("Add at least one model (or fetch them from the endpoint)");
 
@@ -134,13 +159,57 @@ export class CustomProviders {
 					id: m.id,
 					...(m.name ? { name: m.name } : {}),
 					...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+					...(m.maxTokens ? { maxTokens: m.maxTokens } : {}),
 					...(m.reasoning ? { reasoning: true } : {}),
+					// No "off" in the thinking levels when the model always thinks.
+					...(m.reasoning && m.canDisableThinking === false ? { thinkingLevelMap: { off: null } } : {}),
 					...(m.input?.length ? { input: m.input } : {}),
 				})),
 			};
 		}
 		writeFileSync(this.modelsFile, JSON.stringify({ ...config, providers }, null, 2));
 	}
+}
+
+/**
+ * What a `/models` entry says about a model, across the shapes endpoints use: a `capabilities` object
+ * (OpenAI-style proxies), OpenRouter's `architecture` / `supported_parameters` / `top_provider`, and plain
+ * `context_window` / `max_output_tokens` fields. Unknown stays unknown.
+ */
+export function capabilitiesOf(m: any): Omit<CustomModel, "id" | "name"> {
+	const caps = m.capabilities && typeof m.capabilities === "object" ? m.capabilities : {};
+	const first = (...values: unknown[]) => values.map(Number).find((v) => Number.isFinite(v) && v > 0);
+	const params: string[] = Array.isArray(m.supported_parameters) ? m.supported_parameters : [];
+	const modalities: string[] = m.architecture?.input_modalities ?? m.input_modalities ?? m.modalities?.input ?? [];
+	const reasoning =
+		caps.reasoning === true ||
+		caps.thinking === true ||
+		m.reasoning === true ||
+		params.includes("reasoning") ||
+		params.includes("include_reasoning") ||
+		params.includes("reasoning_effort");
+	const vision = caps.vision === true || m.vision === true || modalities.includes?.("image");
+	return {
+		contextWindow: first(
+			caps.contextWindow,
+			caps.context_window,
+			m.context_window,
+			m.context_length,
+			m.max_context_window_tokens,
+			m.max_context_length,
+			m.top_provider?.context_length,
+		),
+		maxTokens: first(
+			caps.maxOutput,
+			caps.max_output_tokens,
+			m.max_output_tokens,
+			m.max_completion_tokens,
+			m.top_provider?.max_completion_tokens,
+		),
+		...(reasoning && { reasoning: true }),
+		...(reasoning && (caps.thinkingCanDisable === false || caps.reasoningCanDisable === false) && { canDisableThinking: false }),
+		...(vision && { input: ["text", "image"] }),
+	};
 }
 
 /** Asks the endpoint which models it serves (`GET …/models`). */
@@ -178,14 +247,25 @@ export async function fetchModels(api: ProviderApi, baseUrl: string, apiKey: str
 			if (Array.isArray(m.supportedGenerationMethods) && !m.supportedGenerationMethods.includes("generateContent"))
 				continue;
 			const id = String(m.name ?? "").replace(/^models\//, "");
-			if (id) models.push({ id, name: m.displayName || undefined, contextWindow: m.inputTokenLimit || undefined });
+			if (!id) continue;
+			models.push(
+				cleanModel({
+					id,
+					name: m.displayName,
+					contextWindow: m.inputTokenLimit,
+					maxTokens: m.outputTokenLimit,
+					reasoning: m.thinking === true,
+				}),
+			);
 			continue;
 		}
 		const id = typeof m === "string" ? m : String(m.id ?? m.name ?? "");
 		if (!id) continue;
-		const contextWindow = Number(m.context_length ?? m.context_window ?? m.max_context_length ?? 0) || undefined;
-		const input = m.architecture?.input_modalities?.includes?.("image") ? ["text", "image"] : undefined;
-		models.push({ id, name: m.display_name || (m.name !== id ? m.name : undefined) || undefined, contextWindow, input });
+		if (typeof m === "string") {
+			models.push({ id });
+			continue;
+		}
+		models.push(cleanModel({ id, name: m.display_name || (m.name !== id ? m.name : undefined), ...capabilitiesOf(m) }));
 	}
 	if (!models.length) throw new Error("The endpoint returned no models");
 	return models.sort((a, b) => a.id.localeCompare(b.id));
