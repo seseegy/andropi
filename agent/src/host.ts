@@ -38,6 +38,7 @@ import { CustomProviders, fetchModels } from "./providers.js";
 import { type RunSession, Runner } from "./runs.js";
 import { Skills } from "./skills.js";
 import { GitHubSync } from "./sync.js";
+import { todoTool } from "./todo.js";
 import { s1Usage, webTools } from "./web.js";
 import {
 	collectFiles,
@@ -55,7 +56,7 @@ import {
 type Command = { id?: number; type: string; [key: string]: any };
 
 /** Built-in and app tools; MCP tools are added per session. This is the *active* set. */
-const TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot"];
+const TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot", "todo_write"];
 
 const agentDir = getAgentDir();
 const workspace = process.env.ANDROPI_WORKSPACE ?? process.cwd();
@@ -160,7 +161,11 @@ async function buildSession(sessionManager: SessionManager, opts: { interactive:
 		sessionManager,
 		resourceLoader,
 		tools: [...TOOLS, ...mcpTools.map((t) => t.name)],
-		customTools: [...webTools(() => integrations.searchKeys(), () => sessionManager.getCwd()), ...mcpTools] as any,
+		customTools: [
+			...webTools(() => integrations.searchKeys(), () => sessionManager.getCwd()),
+			todoTool(),
+			...mcpTools,
+		] as any,
 	});
 	// Some models send "None" or numbers-as-strings for tool arguments.
 	installLenientTools(result.session.agent);
@@ -327,6 +332,9 @@ You are running inside AndroPI, an Android app, on the user's phone.
   to install or use something, and to look up unfamiliar errors. With a
   Search1API key you also have \`web_screenshot\`, to see how a page looks
   (e.g. to check a site you built after deploying it).
+- For tasks with three or more steps, call \`todo_write\` with your plan before
+  starting, and keep it current (one step in_progress, each marked completed
+  as soon as it is done). The user follows it in the app.
 - Dev servers: run them in the background (\`nohup npm run dev > dev.log 2>&1 &\`)
   and print the URL (e.g. http://localhost:5173); the app offers a live
   preview and a public link for any localhost port it sees.

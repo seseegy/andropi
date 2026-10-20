@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:simple_icons/simple_icons.dart';
 
+import '../agent/todos.dart';
 import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import '../agent/models.dart';
@@ -218,12 +219,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       return;
     }
     final tool = agent.runningTool;
-    final line = '${agent.chatTitle}|$tool';
+    // With a plan, the step it is on says more than the tool it is running.
+    final plan = currentPlan(agent.entries);
+    final step = plan == null || plan.finished
+        ? null
+        : tr('Step {n}/{total}: {step}')
+              .replaceAll('{n}', '${plan.currentNumber}')
+              .replaceAll('{total}', '${plan.total}')
+              .replaceAll('{step}', plan.current?.label ?? '');
+    final text = step ?? (tool == null ? tr('Agent is working') : '${tr('Running')} $tool');
+    final line = '${agent.chatTitle}|$text';
     if (line == _busyLine) return;
     _busyLine = line;
-    agent.client
-        .busyText(title: agent.chatTitle, text: tool == null ? tr('Agent is working') : '${tr('Running')} $tool')
-        .catchError((_) {});
+    agent.client.busyText(title: agent.chatTitle, text: text).catchError((_) {});
   }
 
   bool _syncWarned = false;

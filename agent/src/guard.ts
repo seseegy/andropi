@@ -16,7 +16,7 @@ export interface GuardHooks {
 }
 
 /** Tools that change nothing; never need approval and stay on in plan mode. */
-const READ_ONLY = new Set(["read", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot"]);
+const READ_ONLY = new Set(["read", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot", "todo_write"]);
 
 /** Commands worth a second look before they run. */
 const RISKY_BASH = [

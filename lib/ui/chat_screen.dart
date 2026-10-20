@@ -6,6 +6,7 @@ import '../agent/agent_controller.dart';
 import '../agent/drafts.dart';
 import '../agent/models.dart';
 import '../agent/features.dart';
+import '../agent/todos.dart';
 import 'i18n.dart';
 import 'chat_extras.dart';
 import 'deploy_sheet.dart';
@@ -23,6 +24,7 @@ import 'terminal_screen.dart';
 import 'settings_screen.dart';
 import 'folder_picker.dart';
 import 'theme.dart';
+import 'todo_views.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -388,6 +390,12 @@ class _ChatScreenState extends State<ChatScreen> {
             DevServerBanner(agent: agent),
             ApprovalCards(features: agent.features),
             PlanBar(agent: agent),
+            // The agent's todo list for the task at hand (todo_write).
+            if (currentPlan(agent.entries) case final plan?)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                child: TodoProgressBar(plan: plan),
+              ),
             if (_slashQuery != null && slash != null)
               SlashMenu(commands: slash!, query: _slashQuery!, onPick: (c) => _prefill('/${c.name} ')),
             if (agent.billingNotice != null)
