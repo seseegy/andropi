@@ -6,6 +6,7 @@ import 'agent_client.dart';
 import 'features.dart';
 import 'integrations.dart';
 import 'models.dart';
+import 'todos.dart';
 
 enum BootStatus { starting, ready, failed }
 
@@ -43,6 +44,37 @@ class AgentController extends ChangeNotifier {
 
   final entries = <ChatEntry>[];
   final tools = <String, ToolRun>{};
+
+  /// Plans the user closed (todo_write call ids); kept for the app's lifetime.
+  final _dismissedPlans = <String>{};
+  Object? _todoKey;
+  TodoState? _todo;
+
+  /// The agent's plan for the chat (see currentPlan), worked out once per change rather than on every rebuild.
+  TodoState? get todo {
+    final last = entries.lastOrNull;
+    final key = (
+      sessionId,
+      entries.length,
+      identityHashCode(last),
+      last is AssistantEntry ? (last.streaming, last.blocks.length) : null,
+      tools.length,
+      tools.values.where((t) => t.status == ToolStatus.failed).length,
+      _dismissedPlans.length,
+    );
+    if (key == _todoKey) return _todo;
+    _todoKey = key;
+    _todo = currentPlan(entries, tools: tools, dismissed: _dismissedPlans, saved: PlanStore.instance.recall(sessionId));
+    // Kept on disk so the plan outlives compaction.
+    if (_todo case final t? when t.currentTurn) PlanStore.instance.remember(sessionId, t);
+    return _todo;
+  }
+
+  /// Hides a plan from an earlier turn that no longer applies.
+  void dismissPlan(String id) {
+    _dismissedPlans.add(id);
+    notifyListeners();
+  }
 
   List<ProviderInfo> providers = const [];
   List<ModelInfo> models = const [];
@@ -289,10 +321,9 @@ class AgentController extends ChangeNotifier {
   Future<void> saveCustomProvider(Map<String, dynamic> provider) async {
     await client.call('custom_provider_save', {'provider': provider});
     await refreshProviders();
-    if (model == null) {
-      _applyState(await client.call<Map<String, dynamic>>('state'));
-      if (model == null && models.isNotEmpty) await setModel(models.first);
-    }
+    // The host swaps in the saved definition for the open chat: pick up its thinking levels and limits.
+    _applyState(await client.call<Map<String, dynamic>>('state'));
+    if (model == null && models.isNotEmpty) await setModel(models.first);
     notifyListeners();
   }
 

@@ -15,7 +15,35 @@ import { readSecureJson, writeSecureJson } from "./secure.js";
 export const APIS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
 export type ProviderApi = (typeof APIS)[number];
 
-export type CustomModel = { id: string; name?: string; contextWindow?: number; reasoning?: boolean; input?: string[] };
+export type CustomModel = {
+	id: string;
+	name?: string;
+	contextWindow?: number;
+	/** Longest reply the model can write, in tokens. */
+	maxTokens?: number;
+	/** Thinks before answering; the app then offers a thinking effort. */
+	reasoning?: boolean;
+	/** False when thinking can't be turned off (only effort levels, no "off"); true when the endpoint says it can. */
+	canDisableThinking?: boolean;
+	/** False when the endpoint says effort levels make no difference: thinking is just on (or off). */
+	effort?: boolean;
+	input?: string[];
+};
+
+/** A model as saved: only known fields, with sane types. */
+function cleanModel(m: any): CustomModel {
+	const num = (v: unknown) => (typeof v === "number" && v > 0 ? Math.round(v) : undefined);
+	return {
+		id: String(m.id ?? "").trim(),
+		...(typeof m.name === "string" && m.name.trim() && { name: m.name.trim() }),
+		...(num(m.contextWindow) && { contextWindow: num(m.contextWindow) }),
+		...(num(m.maxTokens) && { maxTokens: num(m.maxTokens) }),
+		...(m.reasoning === true && { reasoning: true }),
+		...(m.reasoning === true && typeof m.canDisableThinking === "boolean" && { canDisableThinking: m.canDisableThinking }),
+		...(m.reasoning === true && m.effort === false && { effort: false }),
+		...(Array.isArray(m.input) && m.input.includes("image") && { input: ["text", "image"] }),
+	};
+}
 
 export type CustomProvider = {
 	id: string;
@@ -73,7 +101,7 @@ export class CustomProviders {
 		const baseUrl = cleanUrl(String(input.baseUrl ?? ""));
 		if (!/^https?:\/\/[^/]+/.test(baseUrl)) throw new Error("Enter a full base URL (https://…)");
 		const models = (input.models ?? [])
-			.map((m) => ({ ...m, id: String(m.id ?? "").trim() }))
+			.map(cleanModel)
 			.filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i);
 		if (!models.length) throw new Error("Add at least one model (or fetch them from the endpoint)");
 
@@ -134,13 +162,107 @@ export class CustomProviders {
 					id: m.id,
 					...(m.name ? { name: m.name } : {}),
 					...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
-					...(m.reasoning ? { reasoning: true } : {}),
+					...(m.maxTokens ? { maxTokens: requestedOutput(m) } : {}),
+					...(m.reasoning ? { reasoning: true, thinkingLevelMap: thinkingLevels(m, p.api) } : {}),
 					...(m.input?.length ? { input: m.input } : {}),
 				})),
 			};
 		}
 		writeFileSync(this.modelsFile, JSON.stringify({ ...config, providers }, null, 2));
 	}
+}
+
+/**
+ * What a `/models` entry says about a model, across the shapes endpoints use: a `capabilities` object
+ * (OpenAI-style proxies), OpenRouter's `architecture` / `supported_parameters` / `top_provider`, and plain
+ * `context_window` / `max_output_tokens` fields. Unknown stays unknown.
+ */
+export function capabilitiesOf(m: any): Omit<CustomModel, "id" | "name"> {
+	// A capabilities object, or a list of names (["vision", "thinking"]).
+	const list: string[] = Array.isArray(m.capabilities) ? m.capabilities.map((c: unknown) => String(c).toLowerCase()) : [];
+	const caps = m.capabilities && typeof m.capabilities === "object" && !Array.isArray(m.capabilities) ? m.capabilities : {};
+	const limits = caps.limits ?? {};
+	const supports = caps.supports ?? {};
+	// Numbers, or numeric strings; never booleans (Number(true) is 1).
+	const num = (v: unknown) => {
+		const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+		return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+	};
+	const first = (...values: unknown[]) => values.map(num).find((v) => v !== undefined);
+	const flag = (...values: unknown[]) => values.find((v) => typeof v === "boolean") as boolean | undefined;
+	const params: string[] = Array.isArray(m.supported_parameters) ? m.supported_parameters : [];
+	const modalities: string[] = m.architecture?.input_modalities ?? m.input_modalities ?? m.modalities?.input ?? [];
+
+	// An explicit yes or no wins over hints such as supported parameters.
+	const reasoning =
+		flag(caps.reasoning, caps.thinking, supports.reasoning, supports.thinking, m.reasoning) ??
+		(list.includes("reasoning") ||
+			list.includes("thinking") ||
+			params.includes("reasoning") ||
+			params.includes("include_reasoning") ||
+			params.includes("reasoning_effort"));
+	const vision =
+		flag(caps.vision, supports.vision, m.vision) ??
+		(list.includes("vision") || list.includes("image") || m.type === "vlm" || modalities.includes?.("image"));
+
+	// The prompt limit, when smaller, is what actually fits (a proxy may refuse prompts past it).
+	const context = first(
+		caps.contextWindow,
+		caps.context_window,
+		limits.max_context_window_tokens,
+		m.context_window,
+		m.context_length,
+		m.max_context_window_tokens,
+		m.max_context_length,
+		m.top_provider?.context_length,
+	);
+	const prompt = first(m.max_input_tokens, m.max_prompt_tokens, limits.max_prompt_tokens, caps.maxInput);
+	const contextWindow = context && prompt ? Math.min(context, prompt) : (context ?? prompt);
+
+	const canDisable = flag(caps.thinkingCanDisable, caps.reasoningCanDisable);
+	return {
+		contextWindow,
+		maxTokens: first(
+			caps.maxOutput,
+			caps.max_output_tokens,
+			limits.max_output_tokens,
+			m.max_output_tokens,
+			m.max_completion_tokens,
+			m.top_provider?.max_completion_tokens,
+		),
+		...(reasoning && { reasoning: true }),
+		...(reasoning && canDisable !== undefined && { canDisableThinking: canDisable }),
+		...(reasoning && flag(caps.thinkingEffortSupported, caps.reasoningEffortSupported) === false && { effort: false }),
+		...(vision && { input: ["text", "image"] }),
+	};
+}
+
+/**
+ * The reply size pi asks for on every request (max_tokens). The model's full limit (up to 393k on some) would make
+ * every request reserve that much: slow on some servers, and refused by credit checks on others. 32k leaves room
+ * for long answers and thinking; the full limit is still shown in the app.
+ */
+function requestedOutput(m: CustomModel) {
+	const limits = [m.maxTokens!, 32_768];
+	if (m.contextWindow) limits.push(Math.floor(m.contextWindow / 4));
+	return Math.max(1024, Math.min(...limits));
+}
+
+/**
+ * Which of pi's thinking levels a custom reasoning model offers. "minimal" is an OpenAI-only effort, so it is off
+ * the list; models that always think lose "off"; models whose effort makes no difference keep a single level (plus
+ * off), which the app shows as on/off or not at all. When the endpoint says thinking can be turned off, "off" is
+ * sent explicitly as reasoning_effort "none" on OpenAI-style APIs, rather than leaving the model at its default.
+ */
+function thinkingLevels(m: CustomModel, api: ProviderApi) {
+	const map: Record<string, string | null> = { minimal: null };
+	if (m.canDisableThinking === false) map.off = null;
+	else if (m.canDisableThinking === true && api.startsWith("openai")) map.off = "none";
+	if (m.effort === false) {
+		map.low = null;
+		map.high = null;
+	}
+	return map;
 }
 
 /** Asks the endpoint which models it serves (`GET …/models`). */
@@ -178,14 +300,27 @@ export async function fetchModels(api: ProviderApi, baseUrl: string, apiKey: str
 			if (Array.isArray(m.supportedGenerationMethods) && !m.supportedGenerationMethods.includes("generateContent"))
 				continue;
 			const id = String(m.name ?? "").replace(/^models\//, "");
-			if (id) models.push({ id, name: m.displayName || undefined, contextWindow: m.inputTokenLimit || undefined });
+			if (!id) continue;
+			models.push(
+				cleanModel({
+					id,
+					name: m.displayName,
+					contextWindow: m.inputTokenLimit,
+					maxTokens: m.outputTokenLimit,
+					reasoning: m.thinking === true,
+					// Gemini chat models all take images.
+					...(/^gemini/.test(id) && { input: ["text", "image"] }),
+				}),
+			);
 			continue;
 		}
 		const id = typeof m === "string" ? m : String(m.id ?? m.name ?? "");
 		if (!id) continue;
-		const contextWindow = Number(m.context_length ?? m.context_window ?? m.max_context_length ?? 0) || undefined;
-		const input = m.architecture?.input_modalities?.includes?.("image") ? ["text", "image"] : undefined;
-		models.push({ id, name: m.display_name || (m.name !== id ? m.name : undefined) || undefined, contextWindow, input });
+		if (typeof m === "string") {
+			models.push({ id });
+			continue;
+		}
+		models.push(cleanModel({ id, name: m.display_name || (m.name !== id ? m.name : undefined), ...capabilitiesOf(m) }));
 	}
 	if (!models.length) throw new Error("The endpoint returned no models");
 	return models.sort((a, b) => a.id.localeCompare(b.id));

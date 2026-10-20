@@ -90,7 +90,9 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
       setState(() {
         final selectAll = _selected.isEmpty;
         for (final m in found) {
-          _models[m.id] = m;
+          // What was switched by hand outlives a new fetch.
+          final o = _overrides[m.id];
+          _models[m.id] = o == null ? m : m.copyWith(reasoning: o.reasoning, vision: o.vision);
           if (selectAll) _selected.add(m.id);
         }
       });
@@ -100,6 +102,17 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
     } finally {
       if (mounted) setState(() => _fetching = false);
     }
+  }
+
+  /// Reasoning and vision switched by hand, per model id.
+  final _overrides = <String, ({bool? reasoning, bool? vision})>{};
+
+  void _override(CustomModel m, {bool? reasoning, bool? vision}) {
+    final o = _overrides[m.id];
+    setState(() {
+      _overrides[m.id] = (reasoning: reasoning ?? o?.reasoning, vision: vision ?? o?.vision);
+      _models[m.id] = m.copyWith(reasoning: reasoning, vision: vision);
+    });
   }
 
   void _addModel() {
@@ -176,7 +189,8 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
 
   String _details(CustomModel m) => [
     if (m.name != null) m.id,
-    if (m.contextWindow != null) '${(m.contextWindow! / 1000).round()}k context',
+    if (m.contextWindow != null) '${formatTokens(m.contextWindow!)} ${tr('context')}',
+    if (m.maxTokens != null) '${formatTokens(m.maxTokens!)} ${tr('output')}',
   ].join('  ·  ');
 
   @override
@@ -299,20 +313,65 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
                 style: text.bodySmall?.copyWith(color: p.muted),
               ),
             ),
+          // A checkbox and its text, with the capability chips beside rather than inside one list tile, so each
+          // chip is its own control for TalkBack.
           for (final m in visible)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _selected.contains(m.id),
-              onChanged: (v) => setState(() => v == true ? _selected.add(m.id) : _selected.remove(m.id)),
-              title: Text(
-                m.name ?? m.id,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontFamily: mono, fontSize: 13),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _selected.contains(m.id),
+                    semanticLabel: m.name ?? m.id,
+                    onChanged: (v) => setState(() => v == true ? _selected.add(m.id) : _selected.remove(m.id)),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              setState(() => _selected.contains(m.id) ? _selected.remove(m.id) : _selected.add(m.id)),
+                          child: ExcludeSemantics(
+                            child: Text(
+                              m.name ?? m.id,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontFamily: mono, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                        if (_details(m).isNotEmpty) Text(_details(m), style: text.bodySmall?.copyWith(color: p.muted)),
+                        const SizedBox(height: 6),
+                        // What the model can do; tap to correct it when the endpoint doesn't say.
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            _CapabilityChip(
+                              icon: LucideIcons.brain,
+                              label: m.reasoning && !m.canDisableThinking
+                                  ? tr('Reasoning (always on)')
+                                  : tr('Reasoning'),
+                              on: m.reasoning,
+                              onTap: () => _override(m, reasoning: !m.reasoning),
+                            ),
+                            _CapabilityChip(
+                              icon: LucideIcons.eye,
+                              label: tr('Vision'),
+                              on: m.vision,
+                              onTap: () => _override(m, vision: !m.vision),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              subtitle: _details(m).isEmpty ? null : Text(_details(m)),
             ),
           const SizedBox(height: 8),
           Row(
@@ -336,6 +395,55 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
           const SizedBox(height: 20),
           PrimaryButton(label: tr('Save'), icon: LucideIcons.check, busy: _saving, onPressed: _save),
         ],
+      ),
+    );
+  }
+}
+
+/// A capability a model has (filled) or not (outlined); tapping switches it.
+class _CapabilityChip extends StatelessWidget {
+  const _CapabilityChip({required this.icon, required this.label, required this.on, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final color = on ? p.accent : p.faint;
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: on ? p.accent.withValues(alpha: 0.12) : null,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: on ? Colors.transparent : p.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: color),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, color: on ? p.accent : p.muted),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

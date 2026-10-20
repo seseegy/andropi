@@ -9,6 +9,7 @@ class ModelInfo {
   String get name => json['name'] as String? ?? id;
   bool get reasoning => json['reasoning'] == true;
   int? get contextWindow => json['contextWindow'] as int?;
+  int? get maxTokens => (json['maxTokens'] as num?)?.toInt();
   bool get acceptsImages => (json['input'] as List?)?.contains('image') ?? false;
   String get key => '$provider/$id';
 }
@@ -49,6 +50,23 @@ class CustomModel {
   String get id => json['id'] as String;
   String? get name => json['name'] as String?;
   int? get contextWindow => (json['contextWindow'] as num?)?.toInt();
+  int? get maxTokens => (json['maxTokens'] as num?)?.toInt();
+  bool get reasoning => json['reasoning'] == true;
+
+  /// False for models that always think: they get effort levels but no "off".
+  bool get canDisableThinking => json['canDisableThinking'] != false;
+  bool get vision => (json['input'] as List?)?.contains('image') ?? false;
+
+  /// False when the endpoint says effort levels make no difference.
+  bool get effort => json['effort'] != false;
+
+  /// A copy with reasoning or vision switched by hand, for endpoints that don't say.
+  CustomModel copyWith({bool? reasoning, bool? vision}) => CustomModel({
+    ...json,
+    'reasoning': ?reasoning,
+    if (reasoning == false) 'canDisableThinking': null,
+    if (vision != null) 'input': vision ? ['text', 'image'] : ['text'],
+  });
 }
 
 class ProjectDeleteCheck {

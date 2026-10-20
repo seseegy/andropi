@@ -329,5 +329,17 @@ IconData toolIcon(String? name) => switch (name) {
   'web_search' => LucideIcons.search,
   'web_fetch' => LucideIcons.globe,
   'web_screenshot' => LucideIcons.camera,
+  'todo_write' => LucideIcons.listTodo,
   _ => LucideIcons.wrench,
 };
+
+/// A token count for people: 872k, 1M, 1.5M, or the number itself when small.
+String formatTokens(int n) {
+  if (n >= 1000000) {
+    final m = n / 1000000;
+    final s = m >= 10 ? m.round().toString() : m.toStringAsFixed(1);
+    return '${s.endsWith('.0') ? s.substring(0, s.length - 2) : s}M';
+  }
+  if (n >= 1000) return '${(n / 1000).round()}k';
+  return '$n';
+}

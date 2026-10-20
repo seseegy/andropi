@@ -5,6 +5,7 @@ import '../agent/agent_controller.dart';
 import '../agent/models.dart';
 import 'settings_screen.dart';
 import 'i18n.dart';
+import 'kit.dart';
 import 'theme.dart';
 
 Future<void> showModelSheet(BuildContext context, AgentController agent) {
@@ -121,9 +122,11 @@ class _ModelTile extends StatelessWidget {
     final p = context.palette;
     final selected = agent.model?.key == model.key;
     final details = [
-      if (model.contextWindow != null && model.contextWindow! > 0) '${(model.contextWindow! / 1000).round()}k context',
-      if (model.reasoning) 'reasoning',
-      if (model.acceptsImages) 'vision',
+      if (model.contextWindow != null && model.contextWindow! > 0)
+        '${formatTokens(model.contextWindow!)} ${tr('context')}',
+      if (model.maxTokens != null && model.maxTokens! > 0) '${formatTokens(model.maxTokens!)} ${tr('output')}',
+      if (model.reasoning) tr('reasoning'),
+      if (model.acceptsImages) tr('vision'),
     ].join('  ·  ');
     return ListTile(
       onTap: () async {

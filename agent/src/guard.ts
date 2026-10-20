@@ -16,7 +16,7 @@ export interface GuardHooks {
 }
 
 /** Tools that change nothing; never need approval and stay on in plan mode. */
-const READ_ONLY = new Set(["read", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot"]);
+const READ_ONLY = new Set(["read", "grep", "find", "ls", "web_search", "web_fetch", "web_screenshot", "todo_write"]);
 
 /** Commands worth a second look before they run. */
 const RISKY_BASH = [
@@ -98,6 +98,15 @@ export class Guard {
 		pi.on("tool_call", async (event) => {
 			const input = event.input as Record<string, unknown>;
 			const cwd = this.hooks.cwd();
+
+			// The plan in plan mode is the numbered text the user approves; the checklist comes after.
+			if (this.planMode && event.toolName === "todo_write") {
+				return {
+					block: true,
+					reason:
+						"Plan mode is on: write the plan as a numbered list for the user to approve. Call todo_write once it is approved.",
+				};
+			}
 
 			if (this.planMode && !READ_ONLY.has(event.toolName)) {
 				return {
