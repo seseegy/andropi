@@ -1,4 +1,5 @@
 import 'package:andropi/agent/models.dart';
+import 'package:andropi/ui/kit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -24,5 +25,14 @@ void main() {
     expect((on.reasoning, on.vision, on.id), (true, true, 'local-model'));
     final off = CustomModel({'id': 'x', 'reasoning': true, 'canDisableThinking': false}).copyWith(reasoning: false);
     expect((off.reasoning, off.canDisableThinking), (false, true));
+  });
+
+  test('effort and token labels', () {
+    expect(CustomModel({'id': 'a', 'reasoning': true, 'effort': false}).effort, false);
+    expect(CustomModel({'id': 'b', 'reasoning': true}).effort, true);
+    expect(
+      [formatTokens(1048576), formatTokens(872000), formatTokens(1500000), formatTokens(12000000), formatTokens(400)],
+      ['1M', '872k', '1.5M', '12M', '400'],
+    );
   });
 }

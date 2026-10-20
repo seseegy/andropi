@@ -57,6 +57,9 @@ class CustomModel {
   bool get canDisableThinking => json['canDisableThinking'] != false;
   bool get vision => (json['input'] as List?)?.contains('image') ?? false;
 
+  /// False when the endpoint says effort levels make no difference.
+  bool get effort => json['effort'] != false;
+
   /// A copy with reasoning or vision switched by hand, for endpoints that don't say.
   CustomModel copyWith({bool? reasoning, bool? vision}) => CustomModel({
     ...json,

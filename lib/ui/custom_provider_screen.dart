@@ -90,7 +90,9 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
       setState(() {
         final selectAll = _selected.isEmpty;
         for (final m in found) {
-          _models[m.id] = m;
+          // What was switched by hand outlives a new fetch.
+          final o = _overrides[m.id];
+          _models[m.id] = o == null ? m : m.copyWith(reasoning: o.reasoning, vision: o.vision);
           if (selectAll) _selected.add(m.id);
         }
       });
@@ -100,6 +102,17 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
     } finally {
       if (mounted) setState(() => _fetching = false);
     }
+  }
+
+  /// Reasoning and vision switched by hand, per model id.
+  final _overrides = <String, ({bool? reasoning, bool? vision})>{};
+
+  void _override(CustomModel m, {bool? reasoning, bool? vision}) {
+    final o = _overrides[m.id];
+    setState(() {
+      _overrides[m.id] = (reasoning: reasoning ?? o?.reasoning, vision: vision ?? o?.vision);
+      _models[m.id] = m.copyWith(reasoning: reasoning, vision: vision);
+    });
   }
 
   void _addModel() {
@@ -174,13 +187,10 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
     }
   }
 
-  static String _tokens(int n) =>
-      n >= 1000000 ? '${(n / 1000000).toStringAsFixed(n % 1000000 == 0 ? 0 : 1)}M' : '${(n / 1000).round()}k';
-
   String _details(CustomModel m) => [
     if (m.name != null) m.id,
-    if (m.contextWindow != null) '${_tokens(m.contextWindow!)} ${tr('context')}',
-    if (m.maxTokens != null) '${_tokens(m.maxTokens!)} ${tr('output')}',
+    if (m.contextWindow != null) '${formatTokens(m.contextWindow!)} ${tr('context')}',
+    if (m.maxTokens != null) '${formatTokens(m.maxTokens!)} ${tr('output')}',
   ].join('  ·  ');
 
   @override
@@ -303,42 +313,62 @@ class _CustomProviderScreenState extends State<CustomProviderScreen> {
                 style: text.bodySmall?.copyWith(color: p.muted),
               ),
             ),
+          // A checkbox and its text, with the capability chips beside rather than inside one list tile, so each
+          // chip is its own control for TalkBack.
           for (final m in visible)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _selected.contains(m.id),
-              onChanged: (v) => setState(() => v == true ? _selected.add(m.id) : _selected.remove(m.id)),
-              title: Text(
-                m.name ?? m.id,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontFamily: mono, fontSize: 13),
-              ),
-              subtitle: Column(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_details(m).isNotEmpty) Text(_details(m)),
-                  const SizedBox(height: 4),
-                  // What the model can do; tap to correct it when the endpoint doesn't say.
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      _CapabilityChip(
-                        icon: LucideIcons.brain,
-                        label: m.reasoning && !m.canDisableThinking ? tr('Reasoning (always on)') : tr('Reasoning'),
-                        on: m.reasoning,
-                        onTap: () => setState(() => _models[m.id] = m.copyWith(reasoning: !m.reasoning)),
-                      ),
-                      _CapabilityChip(
-                        icon: LucideIcons.eye,
-                        label: tr('Vision'),
-                        on: m.vision,
-                        onTap: () => setState(() => _models[m.id] = m.copyWith(vision: !m.vision)),
-                      ),
-                    ],
+                  Checkbox(
+                    value: _selected.contains(m.id),
+                    semanticLabel: m.name ?? m.id,
+                    onChanged: (v) => setState(() => v == true ? _selected.add(m.id) : _selected.remove(m.id)),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              setState(() => _selected.contains(m.id) ? _selected.remove(m.id) : _selected.add(m.id)),
+                          child: ExcludeSemantics(
+                            child: Text(
+                              m.name ?? m.id,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontFamily: mono, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                        if (_details(m).isNotEmpty) Text(_details(m), style: text.bodySmall?.copyWith(color: p.muted)),
+                        const SizedBox(height: 6),
+                        // What the model can do; tap to correct it when the endpoint doesn't say.
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            _CapabilityChip(
+                              icon: LucideIcons.brain,
+                              label: m.reasoning && !m.canDisableThinking
+                                  ? tr('Reasoning (always on)')
+                                  : tr('Reasoning'),
+                              on: m.reasoning,
+                              onTap: () => _override(m, reasoning: !m.reasoning),
+                            ),
+                            _CapabilityChip(
+                              icon: LucideIcons.eye,
+                              label: tr('Vision'),
+                              on: m.vision,
+                              onTap: () => _override(m, vision: !m.vision),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -387,6 +417,7 @@ class _CapabilityChip extends StatelessWidget {
       toggled: on,
       label: label,
       excludeSemantics: true,
+      onTap: onTap,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
@@ -402,7 +433,14 @@ class _CapabilityChip extends StatelessWidget {
             children: [
               Icon(icon, size: 12, color: color),
               const SizedBox(width: 4),
-              Text(label, style: TextStyle(fontSize: 11.5, color: on ? p.accent : p.muted)),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11.5, color: on ? p.accent : p.muted),
+                ),
+              ),
             ],
           ),
         ),

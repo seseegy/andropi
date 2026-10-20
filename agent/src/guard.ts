@@ -99,6 +99,15 @@ export class Guard {
 			const input = event.input as Record<string, unknown>;
 			const cwd = this.hooks.cwd();
 
+			// The plan in plan mode is the numbered text the user approves; the checklist comes after.
+			if (this.planMode && event.toolName === "todo_write") {
+				return {
+					block: true,
+					reason:
+						"Plan mode is on: write the plan as a numbered list for the user to approve. Call todo_write once it is approved.",
+				};
+			}
+
 			if (this.planMode && !READ_ONLY.has(event.toolName)) {
 				return {
 					block: true,

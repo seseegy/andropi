@@ -95,7 +95,7 @@ class AssistantMessageView extends StatelessWidget {
           // The agent's plan reads better as a checklist than as a tool call.
           children.add(
             b.toolName == 'todo_write'
-                ? TodoCard(block: b)
+                ? TodoCard(block: b, run: tools[b.toolCallId])
                 : ToolCallView(block: b, run: tools[b.toolCallId], cwd: cwd, live: live),
           );
       }

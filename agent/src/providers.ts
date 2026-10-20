@@ -23,8 +23,10 @@ export type CustomModel = {
 	maxTokens?: number;
 	/** Thinks before answering; the app then offers a thinking effort. */
 	reasoning?: boolean;
-	/** False when thinking can't be turned off (only effort levels, no "off"). */
+	/** False when thinking can't be turned off (only effort levels, no "off"); true when the endpoint says it can. */
 	canDisableThinking?: boolean;
+	/** False when the endpoint says effort levels make no difference: thinking is just on (or off). */
+	effort?: boolean;
 	input?: string[];
 };
 
@@ -37,7 +39,8 @@ function cleanModel(m: any): CustomModel {
 		...(num(m.contextWindow) && { contextWindow: num(m.contextWindow) }),
 		...(num(m.maxTokens) && { maxTokens: num(m.maxTokens) }),
 		...(m.reasoning === true && { reasoning: true }),
-		...(m.reasoning === true && m.canDisableThinking === false && { canDisableThinking: false }),
+		...(m.reasoning === true && typeof m.canDisableThinking === "boolean" && { canDisableThinking: m.canDisableThinking }),
+		...(m.reasoning === true && m.effort === false && { effort: false }),
 		...(Array.isArray(m.input) && m.input.includes("image") && { input: ["text", "image"] }),
 	};
 }
@@ -159,10 +162,8 @@ export class CustomProviders {
 					id: m.id,
 					...(m.name ? { name: m.name } : {}),
 					...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
-					...(m.maxTokens ? { maxTokens: m.maxTokens } : {}),
-					...(m.reasoning ? { reasoning: true } : {}),
-					// No "off" in the thinking levels when the model always thinks.
-					...(m.reasoning && m.canDisableThinking === false ? { thinkingLevelMap: { off: null } } : {}),
+					...(m.maxTokens ? { maxTokens: requestedOutput(m) } : {}),
+					...(m.reasoning ? { reasoning: true, thinkingLevelMap: thinkingLevels(m, p.api) } : {}),
 					...(m.input?.length ? { input: m.input } : {}),
 				})),
 			};
@@ -177,39 +178,91 @@ export class CustomProviders {
  * `context_window` / `max_output_tokens` fields. Unknown stays unknown.
  */
 export function capabilitiesOf(m: any): Omit<CustomModel, "id" | "name"> {
-	const caps = m.capabilities && typeof m.capabilities === "object" ? m.capabilities : {};
-	const first = (...values: unknown[]) => values.map(Number).find((v) => Number.isFinite(v) && v > 0);
+	// A capabilities object, or a list of names (["vision", "thinking"]).
+	const list: string[] = Array.isArray(m.capabilities) ? m.capabilities.map((c: unknown) => String(c).toLowerCase()) : [];
+	const caps = m.capabilities && typeof m.capabilities === "object" && !Array.isArray(m.capabilities) ? m.capabilities : {};
+	const limits = caps.limits ?? {};
+	const supports = caps.supports ?? {};
+	// Numbers, or numeric strings; never booleans (Number(true) is 1).
+	const num = (v: unknown) => {
+		const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+		return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+	};
+	const first = (...values: unknown[]) => values.map(num).find((v) => v !== undefined);
+	const flag = (...values: unknown[]) => values.find((v) => typeof v === "boolean") as boolean | undefined;
 	const params: string[] = Array.isArray(m.supported_parameters) ? m.supported_parameters : [];
 	const modalities: string[] = m.architecture?.input_modalities ?? m.input_modalities ?? m.modalities?.input ?? [];
+
+	// An explicit yes or no wins over hints such as supported parameters.
 	const reasoning =
-		caps.reasoning === true ||
-		caps.thinking === true ||
-		m.reasoning === true ||
-		params.includes("reasoning") ||
-		params.includes("include_reasoning") ||
-		params.includes("reasoning_effort");
-	const vision = caps.vision === true || m.vision === true || modalities.includes?.("image");
+		flag(caps.reasoning, caps.thinking, supports.reasoning, supports.thinking, m.reasoning) ??
+		(list.includes("reasoning") ||
+			list.includes("thinking") ||
+			params.includes("reasoning") ||
+			params.includes("include_reasoning") ||
+			params.includes("reasoning_effort"));
+	const vision =
+		flag(caps.vision, supports.vision, m.vision) ??
+		(list.includes("vision") || list.includes("image") || m.type === "vlm" || modalities.includes?.("image"));
+
+	// The prompt limit, when smaller, is what actually fits (a proxy may refuse prompts past it).
+	const context = first(
+		caps.contextWindow,
+		caps.context_window,
+		limits.max_context_window_tokens,
+		m.context_window,
+		m.context_length,
+		m.max_context_window_tokens,
+		m.max_context_length,
+		m.top_provider?.context_length,
+	);
+	const prompt = first(m.max_input_tokens, m.max_prompt_tokens, limits.max_prompt_tokens, caps.maxInput);
+	const contextWindow = context && prompt ? Math.min(context, prompt) : (context ?? prompt);
+
+	const canDisable = flag(caps.thinkingCanDisable, caps.reasoningCanDisable);
 	return {
-		contextWindow: first(
-			caps.contextWindow,
-			caps.context_window,
-			m.context_window,
-			m.context_length,
-			m.max_context_window_tokens,
-			m.max_context_length,
-			m.top_provider?.context_length,
-		),
+		contextWindow,
 		maxTokens: first(
 			caps.maxOutput,
 			caps.max_output_tokens,
+			limits.max_output_tokens,
 			m.max_output_tokens,
 			m.max_completion_tokens,
 			m.top_provider?.max_completion_tokens,
 		),
 		...(reasoning && { reasoning: true }),
-		...(reasoning && (caps.thinkingCanDisable === false || caps.reasoningCanDisable === false) && { canDisableThinking: false }),
+		...(reasoning && canDisable !== undefined && { canDisableThinking: canDisable }),
+		...(reasoning && flag(caps.thinkingEffortSupported, caps.reasoningEffortSupported) === false && { effort: false }),
 		...(vision && { input: ["text", "image"] }),
 	};
+}
+
+/**
+ * The reply size pi asks for on every request (max_tokens). The model's full limit (up to 393k on some) would make
+ * every request reserve that much: slow on some servers, and refused by credit checks on others. 32k leaves room
+ * for long answers and thinking; the full limit is still shown in the app.
+ */
+function requestedOutput(m: CustomModel) {
+	const limits = [m.maxTokens!, 32_768];
+	if (m.contextWindow) limits.push(Math.floor(m.contextWindow / 4));
+	return Math.max(1024, Math.min(...limits));
+}
+
+/**
+ * Which of pi's thinking levels a custom reasoning model offers. "minimal" is an OpenAI-only effort, so it is off
+ * the list; models that always think lose "off"; models whose effort makes no difference keep a single level (plus
+ * off), which the app shows as on/off or not at all. When the endpoint says thinking can be turned off, "off" is
+ * sent explicitly as reasoning_effort "none" on OpenAI-style APIs, rather than leaving the model at its default.
+ */
+function thinkingLevels(m: CustomModel, api: ProviderApi) {
+	const map: Record<string, string | null> = { minimal: null };
+	if (m.canDisableThinking === false) map.off = null;
+	else if (m.canDisableThinking === true && api.startsWith("openai")) map.off = "none";
+	if (m.effort === false) {
+		map.low = null;
+		map.high = null;
+	}
+	return map;
 }
 
 /** Asks the endpoint which models it serves (`GET …/models`). */
@@ -255,6 +308,8 @@ export async function fetchModels(api: ProviderApi, baseUrl: string, apiKey: str
 					contextWindow: m.inputTokenLimit,
 					maxTokens: m.outputTokenLimit,
 					reasoning: m.thinking === true,
+					// Gemini chat models all take images.
+					...(/^gemini/.test(id) && { input: ["text", "image"] }),
 				}),
 			);
 			continue;

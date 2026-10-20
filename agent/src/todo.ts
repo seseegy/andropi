@@ -19,22 +19,38 @@ export interface Todo {
 
 const STATUSES = new Set<TodoStatus>(["pending", "in_progress", "completed"]);
 
+/** "None", "null" and the like, which some models send for an empty field. */
+const EMPTY = /^(none|null|undefined|n\/a)?$/i;
+
+/** The list from a model's arguments: an array, or the same array sent as a JSON string (common outside Anthropic). */
+function listOf(raw: unknown): unknown[] {
+	if (typeof raw === "string") {
+		try {
+			return listOf(JSON.parse(raw));
+		} catch {
+			return [];
+		}
+	}
+	return Array.isArray(raw) ? raw : [];
+}
+
 /** Cleans up what a model sends: drops empty items, maps loose statuses, and keeps one step in progress. */
 export function normalizeTodos(raw: unknown): Todo[] {
-	const list = Array.isArray(raw) ? raw : [];
+	const list = listOf(raw);
 	const todos: Todo[] = [];
 	for (const item of list) {
 		if (!item || typeof item !== "object") continue;
 		const o = item as Record<string, unknown>;
 		const content = String(o.content ?? o.text ?? o.title ?? "").trim();
-		if (!content) continue;
+		if (EMPTY.test(content)) continue;
 		let status = String(o.status ?? "pending")
 			.toLowerCase()
 			.replace(/[\s-]+/g, "_") as TodoStatus;
 		if (status === ("done" as TodoStatus) || status === ("complete" as TodoStatus)) status = "completed";
 		if (status === ("active" as TodoStatus) || status === ("doing" as TodoStatus)) status = "in_progress";
 		if (!STATUSES.has(status)) status = "pending";
-		const activeForm = typeof o.activeForm === "string" && o.activeForm.trim() ? o.activeForm.trim() : undefined;
+		const activeForm =
+			typeof o.activeForm === "string" && !EMPTY.test(o.activeForm.trim()) ? o.activeForm.trim() : undefined;
 		todos.push({ content, status, ...(activeForm && { activeForm }) });
 	}
 	// One step at a time: later "in progress" items wait.
@@ -87,6 +103,12 @@ export function todoTool() {
 				{ description: "The full list, in order" },
 			),
 		}),
+		// Before validation: accept the list as a JSON string, "text"/"title" for content and a missing status,
+		// instead of failing the call over its shape.
+		prepareArguments(args: unknown) {
+			const todos = normalizeTodos((args as { todos?: unknown } | null)?.todos);
+			return { todos: todos.map((t) => ({ ...t })) };
+		},
 		async execute(_id: string, params: { todos: unknown }) {
 			const todos = normalizeTodos(params.todos);
 			return { content: [{ type: "text" as const, text: describeTodos(todos) }], details: { todos } };

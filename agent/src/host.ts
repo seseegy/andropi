@@ -335,7 +335,8 @@ You are running inside AndroPI, an Android app, on the user's phone.
   (e.g. to check a site you built after deploying it).
 - For tasks with three or more steps, call \`todo_write\` with your plan before
   starting, and keep it current (one step in_progress, each marked completed
-  as soon as it is done). The user follows it in the app.
+  as soon as it is done). The user follows it in the app. In plan mode, write
+  the plan as text first; call \`todo_write\` once it is approved.
 - Dev servers: run them in the background (\`nohup npm run dev > dev.log 2>&1 &\`)
   and print the URL (e.g. http://localhost:5173); the app offers a live
   preview and a public link for any localhost port it sees.
@@ -666,8 +667,19 @@ async function handle(cmd: Command): Promise<unknown> {
 		case "custom_provider_save": {
 			const custom = customProviders.ids();
 			const builtin = new Set(modelRuntime.getProviders().map((p) => p.id).filter((id) => !custom.has(id)));
-			customProviders.save(cmd.provider ?? {}, builtin);
+			const saved = customProviders.save(cmd.provider ?? {}, builtin);
 			await modelRuntime.refresh({ allowNetwork: false });
+			// The open chat holds its own copy of the model: swap in the new definition (reasoning, limits) now
+			// rather than on the next restart, keeping the chosen thinking level where the model still allows it.
+			const current = s.model;
+			if (current?.provider === saved.id) {
+				const fresh = modelRuntime.getModel(saved.id, current.id);
+				if (fresh) {
+					const level = s.thinkingLevel;
+					await s.setModel(fresh);
+					s.setThinkingLevel(level);
+				}
+			}
 			return customProviders.list();
 		}
 		case "custom_provider_delete":

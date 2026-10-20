@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:simple_icons/simple_icons.dart';
 
-import '../agent/todos.dart';
 import '../agent/agent_controller.dart';
 import '../agent/integrations.dart';
 import '../agent/models.dart';
@@ -220,7 +219,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     }
     final tool = agent.runningTool;
     // With a plan, the step it is on says more than the tool it is running.
-    final plan = currentPlan(agent.entries);
+    // Only a plan from this turn: an older one may be about something else.
+    final todo = agent.todo;
+    final plan = todo != null && todo.currentTurn ? todo.plan : null;
     final step = plan == null || plan.finished
         ? null
         : tr('Step {n}/{total}: {step}')
