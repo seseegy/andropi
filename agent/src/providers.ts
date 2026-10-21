@@ -1,1 +1,347 @@
-LyoqCiAqIEN1c3RvbSBtb2RlbCBwcm92aWRlcnM6IGFueSBPcGVuQUktLCBBbnRocm9waWMtIG9yIEdvb2dsZS1jb21wYXRpYmxlIGVuZHBvaW50CiAqIHRoZSB1c2VyIGFkZHMgd2l0aCBhIGJhc2UgVVJMIGFuZCBhbiBBUEkga2V5IChwcm94aWVzLCBPbGxhbWEsIExNIFN0dWRpbywKICogdkxMTSwgLi4uKS4KICoKICogVGhlIGFwcCBrZWVwcyB0aGVtIGluIGl0cyBvd24gZW5jcnlwdGVkIHN0b3JlIGFuZCB3cml0ZXMgcGkncyBtb2RlbHMuanNvbgogKiBmcm9tIGl0LiBtb2RlbHMuanNvbiBvbmx5IHJlZmVyZW5jZXMgZWFjaCBrZXkgYXMgYCRBTkRST1BJX1BST1ZJREVSX0tFWV88SUQ+YCwKICogd2hpY2ggcGkgcmVzb2x2ZXMgZnJvbSB0aGUgZW52aXJvbm1lbnQsIHNvIGtleXMgbmV2ZXIgc2l0IHRoZXJlIGluIHBsYWluCiAqIHRleHQuIFByb3ZpZGVycyBpbiBtb2RlbHMuanNvbiB0aGF0IHRoZSBhcHAgZGlkIG5vdCBhZGQgYXJlIGxlZnQgdW50b3VjaGVkLgogKi8KCmltcG9ydCB7IGV4aXN0c1N5bmMsIHJlYWRGaWxlU3luYywgd3JpdGVGaWxlU3luYyB9IGZyb20gIm5vZGU6ZnMiOwppbXBvcnQgeyByZWFkU2VjdXJlSnNvbiwgd3JpdGVTZWN1cmVKc29uIH0gZnJvbSAiLi9zZWN1cmUuanMiOwoKZXhwb3J0IGNvbnN0IEFQSVMgPSBbIm9wZW5haS1jb21wbGV0aW9ucyIsICJvcGVuYWktcmVzcG9uc2VzIiwgImFudGhyb3BpYy1tZXNzYWdlcyIsICJnb29nbGUtZ2VuZXJhdGl2ZS1haSJdIGFzIGNvbnN0OwpleHBvcnQgdHlwZSBQcm92aWRlckFwaSA9ICh0eXBlb2YgQVBJUylbbnVtYmVyXTsKCmV4cG9ydCB0eXBlIEN1c3RvbU1vZGVsID0gewoJaWQ6IHN0cmluZzsKCW5hbWU/OiBzdHJpbmc7Cgljb250ZXh0V2luZG93PzogbnVtYmVyOwoJLyoqIExvbmdlc3QgcmVwbHkgdGhlIG1vZGVsIGNhbiB3cml0ZSwgaW4gdG9rZW5zLiAqLwoJbWF4VG9rZW5zPzogbnVtYmVyOwoJLyoqIFRoaW5rcyBiZWZvcmUgYW5zd2VyaW5nOyB0aGUgYXBwIHRoZW4gb2ZmZXJzIGEgdGhpbmtpbmcgZWZmb3J0LiAqLwoJcmVhc29uaW5nPzogYm9vbGVhbjsKCS8qKiBGYWxzZSB3aGVuIHRoaW5raW5nIGNhbid0IGJlIHR1cm5lZCBvZmYgKG9ubHkgZWZmb3J0IGxldmVscywgbm8gIm9mZiIpOyB0cnVlIHdoZW4gdGhlIGVuZHBvaW50IHNheXMgaXQgY2FuLiAqLwoJY2FuRGlzYWJsZVRoaW5raW5nPzogYm9vbGVhbjsKCS8qKiBGYWxzZSB3aGVuIHRoZSBlbmRwb2ludCBzYXlzIGVmZm9ydCBsZXZlbHMgbWFrZSBubyBkaWZmZXJlbmNlOiB0aGlua2luZyBpcyBqdXN0IG9uIChvciBvZmYpLiAqLwoJZWZmb3J0PzogYm9vbGVhbjsKCWlucHV0Pzogc3RyaW5nW107Cn07CgovKiogQSBtb2RlbCBhcyBzYXZlZDogb25seSBrbm93biBmaWVsZHMsIHdpdGggc2FuZSB0eXBlcy4gKi8KZnVuY3Rpb24gY2xlYW5Nb2RlbChtOiBhbnkpOiBDdXN0b21Nb2RlbCB7Cgljb25zdCBudW0gPSAodjogdW5rbm93bikgPT4gKHR5cGVvZiB2ID09PSAibnVtYmVyIiAmJiB2ID4gMCA/IE1hdGgucm91bmQodikgOiB1bmRlZmluZWQpOwoJcmV0dXJuIHsKCQlpZDogU3RyaW5nKG0uaWQgPz8gIiIpLnRyaW0oKSwKCQkuLi4odHlwZW9mIG0ubmFtZSA9PT0gInN0cmluZyIgJiYgbS5uYW1lLnRyaW0oKSAmJiB7IG5hbWU6IG0ubmFtZS50cmltKCkgfSksCgkJLi4uKG51bShtLmNvbnRleHRXaW5kb3cpICYmIHsgY29udGV4dFdpbmRvdzogbnVtKG0uY29udGV4dFdpbmRvdykgfSksCgkJLi4uKG51bShtLm1heFRva2VucykgJiYgeyBtYXhUb2tlbnM6IG51bShtLm1heFRva2VucykgfSksCgkJLi4uKG0ucmVhc29uaW5nID09PSB0cnVlICYmIHsgcmVhc29uaW5nOiB0cnVlIH0pLAoJCS4uLihtLnJlYXNvbmluZyA9PT0gdHJ1ZSAmJiB0eXBlb2YgbS5jYW5EaXNhYmxlVGhpbmtpbmcgPT09ICJib29sZWFuIiAmJiB7IGNhbkRpc2FibGVUaGlua2luZzogbS5jYW5EaXNhYmxlVGhpbmtpbmcgfSksCgkJLi4uKG0ucmVhc29uaW5nID09PSB0cnVlICYmIG0uZWZmb3J0ID09PSBmYWxzZSAmJiB7IGVmZm9ydDogZmFsc2UgfSksCgkJLi4uKEFycmF5LmlzQXJyYXkobS5pbnB1dCkgJiYgbS5pbnB1dC5pbmNsdWRlcygiaW1hZ2UiKSAmJiB7IGlucHV0OiBbInRleHQiLCAiaW1hZ2UiXSB9KSwKCX07Cn0KCmV4cG9ydCB0eXBlIEN1c3RvbVByb3ZpZGVyID0gewoJaWQ6IHN0cmluZzsKCW5hbWU6IHN0cmluZzsKCWFwaTogUHJvdmlkZXJBcGk7CgliYXNlVXJsOiBzdHJpbmc7CglhcGlLZXk6IHN0cmluZzsKCW1vZGVsczogQ3VzdG9tTW9kZWxbXTsKfTsKCi8qKiBMb2NhbCBzZXJ2ZXJzIGlnbm9yZSB0aGUga2V5LCBidXQgcGkgb25seSBsaXN0cyBtb2RlbHMgd2hvc2UgcHJvdmlkZXIgaGFzIG9uZS4gKi8KY29uc3QgTk9fS0VZID0gIm5vbmUiOwoKZnVuY3Rpb24gZW52TmFtZShpZDogc3RyaW5nKSB7CglyZXR1cm4gYEFORFJPUElfUFJPVklERVJfS0VZXyR7aWQudG9VcHBlckNhc2UoKS5yZXBsYWNlKC9bXkEtWjAtOV0vZywgIl8iKX1gOwp9CgpmdW5jdGlvbiBjbGVhblVybCh1cmw6IHN0cmluZykgewoJcmV0dXJuIHVybC50cmltKCkucmVwbGFjZSgvXC8rJC8sICIiKTsKfQoKZXhwb3J0IGNsYXNzIEN1c3RvbVByb3ZpZGVycyB7Cglwcml2YXRlIHByb3ZpZGVyczogQ3VzdG9tUHJvdmlkZXJbXTsKCgljb25zdHJ1Y3RvcigKCQlwcml2YXRlIHJlYWRvbmx5IHN0b3JlRmlsZTogc3RyaW5nLAoJCXByaXZhdGUgcmVhZG9ubHkgbW9kZWxzRmlsZTogc3RyaW5nLAoJKSB7CgkJdGhpcy5wcm92aWRlcnMgPSByZWFkU2VjdXJlSnNvbjxDdXN0b21Qcm92aWRlcltdPihzdG9yZUZpbGUsIFtdKTsKCQkvLyBtb2RlbHMuanNvbiBpcyBkZXJpdmVkIGZyb20gdGhlIHN0b3JlLCBidXQgaG93IGFuIGVudHJ5IGlzIGdlbmVyYXRlZAoJCS8vIGNoYW5nZXMgYWNyb3NzIGFwcCB2ZXJzaW9ucyAoZS5nLiB0aGUgdGhpbmtpbmctbGV2ZWwgbWFwKS4gUmV3cml0ZSB0aGUKCQkvLyBhcHAtbWFuYWdlZCBlbnRyaWVzIHdoZW5ldmVyIHRoZSBmaWxlIG9uIGRpc2sgZGlmZmVycyBmcm9tIHdoYXQgdGhpcwoJCS8vIGJ1aWxkIHdvdWxkIHdyaXRlLCBzbyBhbiBhcHAgdXBkYXRlIGhlYWxzIGEgc3RhbGUgZmlsZSB3aXRob3V0IHRoZQoJCS8vIHVzZXIgcmUtc2F2aW5nIGEgcHJvdmlkZXI7IHByb3ZpZGVycyB0aGUgYXBwIGRpZCBub3QgYWRkIGFyZSBsZWZ0CgkJLy8gdW50b3VjaGVkLCBhcyBpbiB3cml0ZU1vZGVsc0pzb24uIEEgaGFuZC1icm9rZW4gZmlsZSBpcyBsZWZ0IGFsb25lCgkJLy8gaGVyZTsgc2F2aW5nIGEgcHJvdmlkZXIgc3RpbGwgc3VyZmFjZXMgdGhlIHBhcnNlIGVycm9yLgoJCXRyeSB7CgkJCWNvbnN0IHRleHQgPSB0aGlzLm1vZGVsc0pzb25UZXh0KFtdKTsKCQkJaWYgKCFleGlzdHNTeW5jKHRoaXMubW9kZWxzRmlsZSkgfHwgcmVhZEZpbGVTeW5jKHRoaXMubW9kZWxzRmlsZSwgInV0ZjgiKSAhPT0gdGV4dCkgewoJCQkJd3JpdGVGaWxlU3luYyh0aGlzLm1vZGVsc0ZpbGUsIHRleHQpOwoJCQl9CgkJfSBjYXRjaCB7CgkJCS8vIG1vZGVscy5qc29uIGlzIG5vdCB2YWxpZCBKU09OOyBsZWF2ZSBpdCB1bnRvdWNoZWQuCgkJfQoJfQoKCWlkcygpIHsKCQlyZXR1cm4gbmV3IFNldCh0aGlzLnByb3ZpZGVycy5tYXAoKHApID0+IHAuaWQpKTsKCX0KCgkvKiogV2hhdCB0aGUgYXBwIHNob3dzOyBrZXlzIGFyZSBuZXZlciBzZW50IGJhY2suICovCglsaXN0KCkgewoJCXJldHVybiB0aGlzLnByb3ZpZGVycy5tYXAoKHsgYXBpS2V5LCAuLi5yZXN0IH0pID0+ICh7IC4uLnJlc3QsIGhhc0tleTogISFhcGlLZXkgfSkpOwoJfQoKCS8qKiBFeHBvc2VzIHRoZSBrZXlzIHRvIHBpOyBjYWxsIGJlZm9yZSB0aGUgbW9kZWwgcnVudGltZSAocmUpbG9hZHMgbW9kZWxzLmpzb24uICovCglhcHBseUVudigpIHsKCQlmb3IgKGNvbnN0IHAgb2YgdGhpcy5wcm92aWRlcnMpIHByb2Nlc3MuZW52W2Vudk5hbWUocC5pZCldID0gcC5hcGlLZXkgfHwgTk9fS0VZOwoJfQoKCS8qKgoJICogQWRkcyBvciB1cGRhdGVzIGEgcHJvdmlkZXIuIEFuIGVtcHR5IGFwaUtleSBrZWVwcyB0aGUgc2F2ZWQgb25lLgoJICogYGJ1aWx0aW5gIGhvbGRzIHByb3ZpZGVyIGlkcyBwaSBhbHJlYWR5IGtub3dzLCB3aGljaCBhIG5ldyBwcm92aWRlciBtYXkgbm90IHJldXNlLgoJICovCglzYXZlKGlucHV0OiBQYXJ0aWFsPEN1c3RvbVByb3ZpZGVyPiAmIHsgcHJldmlvdXNJZD86IHN0cmluZyB9LCBidWlsdGluOiBTZXQ8c3RyaW5nPikgewoJCWNvbnN0IGlkID0gU3RyaW5nKGlucHV0LmlkID8/ICIiKS50cmltKCk7CgkJaWYgKCEvXlthLXowLTldW2EtejAtOV8tXSokLy50ZXN0KGlkKSkgdGhyb3cgbmV3IEVycm9yKCJQcm92aWRlciBJRDogbG93ZXJjYXNlIGxldHRlcnMsIGRpZ2l0cywgLSBhbmQgXyBvbmx5Iik7CgkJY29uc3QgYXBpID0gaW5wdXQuYXBpIGFzIFByb3ZpZGVyQXBpOwoJCWlmICghQVBJUy5pbmNsdWRlcyhhcGkpKSB0aHJvdyBuZXcgRXJyb3IoYFVua25vd24gQVBJIHR5cGUgJHtpbnB1dC5hcGl9YCk7CgkJY29uc3QgYmFzZVVybCA9IGNsZWFuVXJsKFN0cmluZyhpbnB1dC5iYXNlVXJsID8/ICIiKSk7CgkJaWYgKCEvXmh0dHBzPzpcL1wvW14vXSsvLnRlc3QoYmFzZVVybCkpIHRocm93IG5ldyBFcnJvcigiRW50ZXIgYSBmdWxsIGJhc2UgVVJMIChodHRwczovL+KApikiKTsKCQljb25zdCBtb2RlbHMgPSAoaW5wdXQubW9kZWxzID8/IFtdKQoJCQkubWFwKGNsZWFuTW9kZWwpCgkJCS5maWx0ZXIoKG0sIGksIGFsbCkgPT4gbS5pZCAmJiBhbGwuZmluZEluZGV4KCh4KSA9PiB4LmlkID09PSBtLmlkKSA9PT0gaSk7CgkJaWYgKCFtb2RlbHMubGVuZ3RoKSB0aHJvdyBuZXcgRXJyb3IoIkFkZCBhdCBsZWFzdCBvbmUgbW9kZWwgKG9yIGZldGNoIHRoZW0gZnJvbSB0aGUgZW5kcG9pbnQpIik7CgoJCWNvbnN0IHByZXZpb3VzSWQgPSBpbnB1dC5wcmV2aW91c0lkID8/IGlkOwoJCWNvbnN0IHByZXZpb3VzID0gdGhpcy5wcm92aWRlcnMuZmluZCgocCkgPT4gcC5pZCA9PT0gcHJldmlvdXNJZCk7CgkJaWYgKGlkICE9PSBwcmV2aW91c0lkICYmIHRoaXMucHJvdmlkZXJzLnNvbWUoKHApID0+IHAuaWQgPT09IGlkKSkgdGhyb3cgbmV3IEVycm9yKGAke2lkfSBhbHJlYWR5IGV4aXN0c2ApOwoJCWlmICghdGhpcy5pZHMoKS5oYXMoaWQpICYmIGJ1aWx0aW4uaGFzKGlkKSkgdGhyb3cgbmV3IEVycm9yKGAke2lkfSBpcyBhIGJ1aWx0LWluIHByb3ZpZGVyOyBwaWNrIGFub3RoZXIgSURgKTsKCgkJY29uc3QgcHJvdmlkZXI6IEN1c3RvbVByb3ZpZGVyID0gewoJCQlpZCwKCQkJbmFtZTogU3RyaW5nKGlucHV0Lm5hbWUgPz8gIiIpLnRyaW0oKSB8fCBpZCwKCQkJYXBpLAoJCQliYXNlVXJsLAoJCQlhcGlLZXk6IFN0cmluZyhpbnB1dC5hcGlLZXkgPz8gIiIpLnRyaW0oKSB8fCBwcmV2aW91cz8uYXBpS2V5IHx8ICIiLAoJCQltb2RlbHMsCgkJfTsKCQl0aGlzLnByb3ZpZGVycyA9IFsuLi50aGlzLnByb3ZpZGVycy5maWx0ZXIoKHApID0+IHAuaWQgIT09IHByZXZpb3VzSWQpLCBwcm92aWRlcl07CgkJdGhpcy5wZXJzaXN0KHByZXZpb3VzSWQgPT09IGlkID8gW10gOiBbcHJldmlvdXNJZF0pOwoJCXJldHVybiBwcm92aWRlcjsKCX0KCglyZW1vdmUoaWQ6IHN0cmluZykgewoJCXRoaXMucHJvdmlkZXJzID0gdGhpcy5wcm92aWRlcnMuZmlsdGVyKChwKSA9PiBwLmlkICE9PSBpZCk7CgkJdGhpcy5wZXJzaXN0KFtpZF0pOwoJfQoKCS8qKiBUaGUgc3RvcmVkIGtleSBmb3IgYSBwcm92aWRlciwgc28gIkZldGNoIG1vZGVscyIgd29ya3Mgd2l0aG91dCByZXR5cGluZyBpdC4gKi8KCWtleShpZDogc3RyaW5nKSB7CgkJcmV0dXJuIHRoaXMucHJvdmlkZXJzLmZpbmQoKHApID0+IHAuaWQgPT09IGlkKT8uYXBpS2V5ID8/ICIiOwoJfQoKCXByaXZhdGUgcGVyc2lzdChyZW1vdmVkOiBzdHJpbmdbXSkgewoJCXdyaXRlU2VjdXJlSnNvbih0aGlzLnN0b3JlRmlsZSwgdGhpcy5wcm92aWRlcnMpOwoJCWZvciAoY29uc3QgaWQgb2YgcmVtb3ZlZCkgZGVsZXRlIHByb2Nlc3MuZW52W2Vudk5hbWUoaWQpXTsKCQl0aGlzLmFwcGx5RW52KCk7CgkJdGhpcy53cml0ZU1vZGVsc0pzb24ocmVtb3ZlZCk7Cgl9CgoJcHJpdmF0ZSB3cml0ZU1vZGVsc0pzb24ocmVtb3ZlZDogc3RyaW5nW10pIHsKCQl3cml0ZUZpbGVTeW5jKHRoaXMubW9kZWxzRmlsZSwgdGhpcy5tb2RlbHNKc29uVGV4dChyZW1vdmVkKSk7Cgl9CgoJLyoqIFRoZSBtb2RlbHMuanNvbiBjb250ZW50IHRoaXMgYnVpbGQgd3JpdGVzIGZvciB0aGUgY3VycmVudCBzdG9yZS4gKi8KCXByaXZhdGUgbW9kZWxzSnNvblRleHQocmVtb3ZlZDogc3RyaW5nW10pOiBzdHJpbmcgewoJCWxldCBjb25maWc6IHsgcHJvdmlkZXJzPzogUmVjb3JkPHN0cmluZywgdW5rbm93bj47IFtrZXk6IHN0cmluZ106IHVua25vd24gfSA9IHt9OwoJCWlmIChleGlzdHNTeW5jKHRoaXMubW9kZWxzRmlsZSkpIHsKCQkJLy8gTmV2ZXIgb3ZlcndyaXRlIGEgbW9kZWxzLmpzb24gdGhlIHVzZXIgd3JvdGUgYnkgaGFuZCBpZiBpdCBjYW5ub3QgYmUgcmVhZC4KCQkJdHJ5IHsKCQkJCWNvbmZpZyA9IEpTT04ucGFyc2UocmVhZEZpbGVTeW5jKHRoaXMubW9kZWxzRmlsZSwgInV0ZjgiKSk7CgkJCX0gY2F0Y2ggKGUpIHsKCQkJCXRocm93IG5ldyBFcnJvcihgbW9kZWxzLmpzb24gaXMgbm90IHZhbGlkIEpTT04sIGZpeCBvciBkZWxldGUgaXQgZmlyc3Q6ICR7KGUgYXMgRXJyb3IpLm1lc3NhZ2V9YCk7CgkJCX0KCQl9CgkJY29uc3QgcHJvdmlkZXJzID0geyAuLi4oY29uZmlnLnByb3ZpZGVycyA/PyB7fSkgfTsKCQlmb3IgKGNvbnN0IGlkIG9mIHJlbW92ZWQpIGRlbGV0ZSBwcm92aWRlcnNbaWRdOwoJCWZvciAoY29uc3QgcCBvZiB0aGlzLnByb3ZpZGVycykgewoJCQlwcm92aWRlcnNbcC5pZF0gPSB7CgkJCQluYW1lOiBwLm5hbWUsCgkJCQliYXNlVXJsOiBwLmJhc2VVcmwsCgkJCQlhcGk6IHAuYXBpLAoJCQkJYXBpS2V5OiBgJCR7ZW52TmFtZShwLmlkKX1gLAoJCQkJbW9kZWxzOiBwLm1vZGVscy5tYXAoKG0pID0+ICh7CgkJCQkJaWQ6IG0uaWQsCgkJCQkJLi4uKG0ubmFtZSA/IHsgbmFtZTogbS5uYW1lIH0gOiB7fSksCgkJCQkJLi4uKG0uY29udGV4dFdpbmRvdyA/IHsgY29udGV4dFdpbmRvdzogbS5jb250ZXh0V2luZG93IH0gOiB7fSksCgkJCQkJLi4uKG0ubWF4VG9rZW5zID8geyBtYXhUb2tlbnM6IHJlcXVlc3RlZE91dHB1dChtKSB9IDoge30pLAoJCQkJCS4uLihtLnJlYXNvbmluZyA/IHsgcmVhc29uaW5nOiB0cnVlLCB0aGlua2luZ0xldmVsTWFwOiB0aGlua2luZ0xldmVscyhtLCBwLmFwaSkgfSA6IHt9KSwKCQkJCQkuLi4obS5pbnB1dD8ubGVuZ3RoID8geyBpbnB1dDogbS5pbnB1dCB9IDoge30pLAoJCQkJfSkpLAoJCQl9OwoJCX0KCQlyZXR1cm4gSlNPTi5zdHJpbmdpZnkoeyAuLi5jb25maWcsIHByb3ZpZGVycyB9LCBudWxsLCAyKTsKCX0KfQoKLyoqCiAqIFdoYXQgYSBgL21vZGVsc2AgZW50cnkgc2F5cyBhYm91dCBhIG1vZGVsLCBhY3Jvc3MgdGhlIHNoYXBlcyBlbmRwb2ludHMgdXNlOiBhIGBjYXBhYmlsaXRpZXNgIG9iamVjdAogKiAoT3BlbkFJLXN0eWxlIHByb3hpZXMpLCBPcGVuUm91dGVyJ3MgYGFyY2hpdGVjdHVyZWAgLyBgc3VwcG9ydGVkX3BhcmFtZXRlcnNgIC8gYHRvcF9wcm92aWRlcmAsIGFuZCBwbGFpbgogKiBgY29udGV4dF93aW5kb3dgIC8gYG1heF9vdXRwdXRfdG9rZW5zYCBmaWVsZHMuIFVua25vd24gc3RheXMgdW5rbm93bi4KICovCmV4cG9ydCBmdW5jdGlvbiBjYXBhYmlsaXRpZXNPZihtOiBhbnkpOiBPbWl0PEN1c3RvbU1vZGVsLCAiaWQiIHwgIm5hbWUiPiB7CgkvLyBBIGNhcGFiaWxpdGllcyBvYmplY3QsIG9yIGEgbGlzdCBvZiBuYW1lcyAoWyJ2aXNpb24iLCAidGhpbmtpbmciXSkuCgljb25zdCBsaXN0OiBzdHJpbmdbXSA9IEFycmF5LmlzQXJyYXkobS5jYXBhYmlsaXRpZXMpID8gbS5jYXBhYmlsaXRpZXMubWFwKChjOiB1bmtub3duKSA9PiBTdHJpbmcoYykudG9Mb3dlckNhc2UoKSkgOiBbXTsKCWNvbnN0IGNhcHMgPSBtLmNhcGFiaWxpdGllcyAmJiB0eXBlb2YgbS5jYXBhYmlsaXRpZXMgPT09ICJvYmplY3QiICYmICFBcnJheS5pc0FycmF5KG0uY2FwYWJpbGl0aWVzKSA/IG0uY2FwYWJpbGl0aWVzIDoge307Cgljb25zdCBsaW1pdHMgPSBjYXBzLmxpbWl0cyA/PyB7fTsKCWNvbnN0IHN1cHBvcnRzID0gY2Fwcy5zdXBwb3J0cyA/PyB7fTsKCS8vIE51bWJlcnMsIG9yIG51bWVyaWMgc3RyaW5nczsgbmV2ZXIgYm9vbGVhbnMgKE51bWJlcih0cnVlKSBpcyAxKS4KCWNvbnN0IG51bSA9ICh2OiB1bmtub3duKSA9PiB7CgkJY29uc3QgbiA9IHR5cGVvZiB2ID09PSAibnVtYmVyIiA/IHYgOiB0eXBlb2YgdiA9PT0gInN0cmluZyIgJiYgL15cZCskLy50ZXN0KHYudHJpbSgpKSA/IE51bWJlcih2KSA6IE5hTjsKCQlyZXR1cm4gTnVtYmVyLmlzRmluaXRlKG4pICYmIG4gPiAwID8gTWF0aC5yb3VuZChuKSA6IHVuZGVmaW5lZDsKCX07Cgljb25zdCBmaXJzdCA9ICguLi52YWx1ZXM6IHVua25vd25bXSkgPT4gdmFsdWVzLm1hcChudW0pLmZpbmQoKHYpID0+IHYgIT09IHVuZGVmaW5lZCk7Cgljb25zdCBmbGFnID0gKC4uLnZhbHVlczogdW5rbm93bltdKSA9PiB2YWx1ZXMuZmluZCgodikgPT4gdHlwZW9mIHYgPT09ICJib29sZWFuIikgYXMgYm9vbGVhbiB8IHVuZGVmaW5lZDsKCWNvbnN0IHBhcmFtczogc3RyaW5nW10gPSBBcnJheS5pc0FycmF5KG0uc3VwcG9ydGVkX3BhcmFtZXRlcnMpID8gbS5zdXBwb3J0ZWRfcGFyYW1ldGVycyA6IFtdOwoJY29uc3QgbW9kYWxpdGllczogc3RyaW5nW10gPSBtLmFyY2hpdGVjdHVyZT8uaW5wdXRfbW9kYWxpdGllcyA/PyBtLmlucHV0X21vZGFsaXRpZXMgPz8gbS5tb2RhbGl0aWVzPy5pbnB1dCA/PyBbXTsKCgkvLyBBbiBleHBsaWNpdCB5ZXMgb3Igbm8gd2lucyBvdmVyIGhpbnRzIHN1Y2ggYXMgc3VwcG9ydGVkIHBhcmFtZXRlcnMuCgljb25zdCByZWFzb25pbmcgPQoJCWZsYWcoY2Fwcy5yZWFzb25pbmcsIGNhcHMudGhpbmtpbmcsIHN1cHBvcnRzLnJlYXNvbmluZywgc3VwcG9ydHMudGhpbmtpbmcsIG0ucmVhc29uaW5nKSA/PwoJCShsaXN0LmluY2x1ZGVzKCJyZWFzb25pbmciKSB8fAoJCQlsaXN0LmluY2x1ZGVzKCJ0aGlua2luZyIpIHx8CgkJCXBhcmFtcy5pbmNsdWRlcygicmVhc29uaW5nIikgfHwKCQkJcGFyYW1zLmluY2x1ZGVzKCJpbmNsdWRlX3JlYXNvbmluZyIpIHx8CgkJCXBhcmFtcy5pbmNsdWRlcygicmVhc29uaW5nX2VmZm9ydCIpKTsKCWNvbnN0IHZpc2lvbiA9CgkJZmxhZyhjYXBzLnZpc2lvbiwgc3VwcG9ydHMudmlzaW9uLCBtLnZpc2lvbikgPz8KCQkobGlzdC5pbmNsdWRlcygidmlzaW9uIikgfHwgbGlzdC5pbmNsdWRlcygiaW1hZ2UiKSB8fCBtLnR5cGUgPT09ICJ2bG0iIHx8IG1vZGFsaXRpZXMuaW5jbHVkZXM/LigiaW1hZ2UiKSk7CgoJLy8gVGhlIHByb21wdCBsaW1pdCwgd2hlbiBzbWFsbGVyLCBpcyB3aGF0IGFjdHVhbGx5IGZpdHMgKGEgcHJveHkgbWF5IHJlZnVzZSBwcm9tcHRzIHBhc3QgaXQpLgoJY29uc3QgY29udGV4dCA9IGZpcnN0KAoJCWNhcHMuY29udGV4dFdpbmRvdywKCQljYXBzLmNvbnRleHRfd2luZG93LAoJCWxpbWl0cy5tYXhfY29udGV4dF93aW5kb3dfdG9rZW5zLAoJCW0uY29udGV4dF93aW5kb3csCgkJbS5jb250ZXh0X2xlbmd0aCwKCQltLm1heF9jb250ZXh0X3dpbmRvd190b2tlbnMsCgkJbS5tYXhfY29udGV4dF9sZW5ndGgsCgkJbS50b3BfcHJvdmlkZXI/LmNvbnRleHRfbGVuZ3RoLAoJKTsKCWNvbnN0IHByb21wdCA9IGZpcnN0KG0ubWF4X2lucHV0X3Rva2VucywgbS5tYXhfcHJvbXB0X3Rva2VucywgbGltaXRzLm1heF9wcm9tcHRfdG9rZW5zLCBjYXBzLm1heElucHV0KTsKCWNvbnN0IGNvbnRleHRXaW5kb3cgPSBjb250ZXh0ICYmIHByb21wdCA/IE1hdGgubWluKGNvbnRleHQsIHByb21wdCkgOiAoY29udGV4dCA/PyBwcm9tcHQpOwoKCWNvbnN0IGNhbkRpc2FibGUgPSBmbGFnKGNhcHMudGhpbmtpbmdDYW5EaXNhYmxlLCBjYXBzLnJlYXNvbmluZ0NhbkRpc2FibGUpOwoJcmV0dXJuIHsKCQljb250ZXh0V2luZG93LAoJCW1heFRva2VuczogZmlyc3QoCgkJCWNhcHMubWF4T3V0cHV0LAoJCQljYXBzLm1heF9vdXRwdXRfdG9rZW5zLAoJCQlsaW1pdHMubWF4X291dHB1dF90b2tlbnMsCgkJCW0ubWF4X291dHB1dF90b2tlbnMsCgkJCW0ubWF4X2NvbXBsZXRpb25fdG9rZW5zLAoJCQltLnRvcF9wcm92aWRlcj8ubWF4X2NvbXBsZXRpb25fdG9rZW5zLAoJCSksCgkJLi4uKHJlYXNvbmluZyAmJiB7IHJlYXNvbmluZzogdHJ1ZSB9KSwKCQkuLi4ocmVhc29uaW5nICYmIGNhbkRpc2FibGUgIT09IHVuZGVmaW5lZCAmJiB7IGNhbkRpc2FibGVUaGlua2luZzogY2FuRGlzYWJsZSB9KSwKCQkuLi4ocmVhc29uaW5nICYmIGZsYWcoY2Fwcy50aGlua2luZ0VmZm9ydFN1cHBvcnRlZCwgY2Fwcy5yZWFzb25pbmdFZmZvcnRTdXBwb3J0ZWQpID09PSBmYWxzZSAmJiB7IGVmZm9ydDogZmFsc2UgfSksCgkJLi4uKHZpc2lvbiAmJiB7IGlucHV0OiBbInRleHQiLCAiaW1hZ2UiXSB9KSwKCX07Cn0KCi8qKgogKiBUaGUgcmVwbHkgc2l6ZSBwaSBhc2tzIGZvciBvbiBldmVyeSByZXF1ZXN0IChtYXhfdG9rZW5zKS4gVGhlIG1vZGVsJ3MgZnVsbCBsaW1pdCAodXAgdG8gMzkzayBvbiBzb21lKSB3b3VsZCBtYWtlCiAqIGV2ZXJ5IHJlcXVlc3QgcmVzZXJ2ZSB0aGF0IG11Y2g6IHNsb3cgb24gc29tZSBzZXJ2ZXJzLCBhbmQgcmVmdXNlZCBieSBjcmVkaXQgY2hlY2tzIG9uIG90aGVycy4gMzJrIGxlYXZlcyByb29tCiAqIGZvciBsb25nIGFuc3dlcnMgYW5kIHRoaW5raW5nOyB0aGUgZnVsbCBsaW1pdCBpcyBzdGlsbCBzaG93biBpbiB0aGUgYXBwLgogKi8KZnVuY3Rpb24gcmVxdWVzdGVkT3V0cHV0KG06IEN1c3RvbU1vZGVsKSB7Cgljb25zdCBsaW1pdHMgPSBbbS5tYXhUb2tlbnMhLCAzMl83NjhdOwoJaWYgKG0uY29udGV4dFdpbmRvdykgbGltaXRzLnB1c2goTWF0aC5mbG9vcihtLmNvbnRleHRXaW5kb3cgLyA0KSk7CglyZXR1cm4gTWF0aC5tYXgoMTAyNCwgTWF0aC5taW4oLi4ubGltaXRzKSk7Cn0KCi8qKgogKiBXaGljaCBvZiBwaSdzIHRoaW5raW5nIGxldmVscyBhIGN1c3RvbSByZWFzb25pbmcgbW9kZWwgb2ZmZXJzLiAibWluaW1hbCIgaXMgYW4gT3BlbkFJLW9ubHkgZWZmb3J0LCBzbyBpdCBpcyBvZmYKICogdGhlIGxpc3Q7IG1vZGVscyB0aGF0IGFsd2F5cyB0aGluayBsb3NlICJvZmYiLiBXaGVuIHRoZSBlbmRwb2ludCBzYXlzIHRoaW5raW5nIGNhbiBiZSB0dXJuZWQgb2ZmLCAib2ZmIiBpcwogKiBzZW50IGV4cGxpY2l0bHkgYXMgcmVhc29uaW5nX2VmZm9ydCAibm9uZSIgb24gT3BlbkFJLXN0eWxlIEFQSXMsIHJhdGhlciB0aGFuIGxlYXZpbmcgdGhlIG1vZGVsIGF0IGl0cyBkZWZhdWx0LgogKiBUaGUgZnVsbCBsb3cvbWVkaXVtL2hpZ2ggbGFkZGVyIHN0YXlzIGF2YWlsYWJsZSBldmVuIHdoZW4gdGhlIGVuZHBvaW50IGNsYWltcyBlZmZvcnQgaXMgdW5zdXBwb3J0ZWQ6IHNvbWUKICogY2F0YWxvZ3MgdXNlIHRoYXQgZmxhZyBmb3IgIm5vdCBhZHZlcnRpc2VkIiwgd2hpbGUgdGhlaXIgZW5kcG9pbnRzIGFjY2VwdCB0aGUgc3RhbmRhcmQgZWZmb3J0IHZhbHVlcyAobWVkaXVtCiAqIGFscmVhZHkgZ29lcyBvdXQgb24gZXZlcnkgcmVxdWVzdCkuIHBpIG9ubHkgb2ZmZXJzIHhoaWdoICgiTWF4IiBpbiB0aGUgYXBwKSB3aGVuIHRoZSBtYXAgbmFtZXMgdGhlIGxldmVsLCBzbwogKiBPcGVuQUktc3R5bGUgQVBJcyBtYXAgaXQgZXhwbGljaXRseS4KICovCmZ1bmN0aW9uIHRoaW5raW5nTGV2ZWxzKG06IEN1c3RvbU1vZGVsLCBhcGk6IFByb3ZpZGVyQXBpKSB7Cgljb25zdCBtYXA6IFJlY29yZDxzdHJpbmcsIHN0cmluZyB8IG51bGw+ID0geyBtaW5pbWFsOiBudWxsIH07CglpZiAobS5jYW5EaXNhYmxlVGhpbmtpbmcgPT09IGZhbHNlKSBtYXAub2ZmID0gbnVsbDsKCWVsc2UgaWYgKG0uY2FuRGlzYWJsZVRoaW5raW5nID09PSB0cnVlICYmIGFwaS5zdGFydHNXaXRoKCJvcGVuYWkiKSkgbWFwLm9mZiA9ICJub25lIjsKCWlmIChhcGkuc3RhcnRzV2l0aCgib3BlbmFpIikpIG1hcC54aGlnaCA9ICJ4aGlnaCI7CglyZXR1cm4gbWFwOwp9CgovKiogQXNrcyB0aGUgZW5kcG9pbnQgd2hpY2ggbW9kZWxzIGl0IHNlcnZlcyAoYEdFVCDigKYvbW9kZWxzYCkuICovCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBmZXRjaE1vZGVscyhhcGk6IFByb3ZpZGVyQXBpLCBiYXNlVXJsOiBzdHJpbmcsIGFwaUtleTogc3RyaW5nKTogUHJvbWlzZTxDdXN0b21Nb2RlbFtdPiB7Cgljb25zdCBiYXNlID0gY2xlYW5VcmwoYmFzZVVybCk7CglpZiAoIS9eaHR0cHM/OlwvXC9bXi9dKy8udGVzdChiYXNlKSkgdGhyb3cgbmV3IEVycm9yKCJFbnRlciBhIGZ1bGwgYmFzZSBVUkwgKGh0dHBzOi8v4oCmKSIpOwoJY29uc3QgaGVhZGVyczogUmVjb3JkPHN0cmluZywgc3RyaW5nPiA9IHsgYWNjZXB0OiAiYXBwbGljYXRpb24vanNvbiIgfTsKCWxldCB1cmwgPSBgJHtiYXNlfS9tb2RlbHNgOwoJaWYgKGFwaSA9PT0gImFudGhyb3BpYy1tZXNzYWdlcyIpIHsKCQkvLyBwaSdzIEFudGhyb3BpYyBiYXNlIFVSTCBoYXMgbm8gL3YxOyBhY2NlcHQgZWl0aGVyIGZvcm0gaGVyZS4KCQlpZiAoIS9cL3YxJC8udGVzdChiYXNlKSkgdXJsID0gYCR7YmFzZX0vdjEvbW9kZWxzP2xpbWl0PTEwMDBgOwoJCWlmIChhcGlLZXkpIGhlYWRlcnNbIngtYXBpLWtleSJdID0gYXBpS2V5OwoJCWhlYWRlcnNbImFudGhyb3BpYy12ZXJzaW9uIl0gPSAiMjAyMy0wNi0wMSI7Cgl9IGVsc2UgaWYgKGFwaSA9PT0gImdvb2dsZS1nZW5lcmF0aXZlLWFpIikgewoJCXVybCA9IGAke2Jhc2V9L21vZGVscz9wYWdlU2l6ZT0xMDAwYDsKCQlpZiAoYXBpS2V5KSBoZWFkZXJzWyJ4LWdvb2ctYXBpLWtleSJdID0gYXBpS2V5OwoJfSBlbHNlIGlmIChhcGlLZXkpIHsKCQloZWFkZXJzLmF1dGhvcml6YXRpb24gPSBgQmVhcmVyICR7YXBpS2V5fWA7Cgl9CgoJY29uc3QgcmVzID0gYXdhaXQgZmV0Y2godXJsLCB7IGhlYWRlcnMsIHNpZ25hbDogQWJvcnRTaWduYWwudGltZW91dCgyMF8wMDApIH0pOwoJY29uc3QgYm9keSA9IGF3YWl0IHJlcy50ZXh0KCk7CglpZiAoIXJlcy5vaykgdGhyb3cgbmV3IEVycm9yKGAke3Jlcy5zdGF0dXN9ICR7cmVzLnN0YXR1c1RleHR9OiAke2JvZHkuc2xpY2UoMCwgMzAwKX1gKTsKCWxldCBqc29uOiBhbnk7Cgl0cnkgewoJCWpzb24gPSBKU09OLnBhcnNlKGJvZHkpOwoJfSBjYXRjaCB7CgkJdGhyb3cgbmV3IEVycm9yKGBUaGUgZW5kcG9pbnQgZGlkIG5vdCByZXR1cm4gSlNPTjogJHtib2R5LnNsaWNlKDAsIDIwMCl9YCk7Cgl9CgoJY29uc3QgaXRlbXM6IGFueVtdID0gQXJyYXkuaXNBcnJheShqc29uKSA/IGpzb24gOiAoanNvbi5kYXRhID8/IGpzb24ubW9kZWxzID8/IFtdKTsKCWNvbnN0IG1vZGVsczogQ3VzdG9tTW9kZWxbXSA9IFtdOwoJZm9yIChjb25zdCBtIG9mIGl0ZW1zKSB7CgkJaWYgKGFwaSA9PT0gImdvb2dsZS1nZW5lcmF0aXZlLWFpIikgewoJCQlpZiAoQXJyYXkuaXNBcnJheShtLnN1cHBvcnRlZEdlbmVyYXRpb25NZXRob2RzKSAmJiAhbS5zdXBwb3J0ZWRHZW5lcmF0aW9uTWV0aG9kcy5pbmNsdWRlcygiZ2VuZXJhdGVDb250ZW50IikpCgkJCQljb250aW51ZTsKCQkJY29uc3QgaWQgPSBTdHJpbmcobS5uYW1lID8/ICIiKS5yZXBsYWNlKC9ebW9kZWxzXC8vLCAiIik7CgkJCWlmICghaWQpIGNvbnRpbnVlOwoJCQltb2RlbHMucHVzaCgKCQkJCWNsZWFuTW9kZWwoewoJCQkJCWlkLAoJCQkJCW5hbWU6IG0uZGlzcGxheU5hbWUsCgkJCQkJY29udGV4dFdpbmRvdzogbS5pbnB1dFRva2VuTGltaXQsCgkJCQkJbWF4VG9rZW5zOiBtLm91dHB1dFRva2VuTGltaXQsCgkJCQkJcmVhc29uaW5nOiBtLnRoaW5raW5nID09PSB0cnVlLAoJCQkJCS8vIEdlbWluaSBjaGF0IG1vZGVscyBhbGwgdGFrZSBpbWFnZXMuCgkJCQkJLi4uKC9eZ2VtaW5pLy50ZXN0KGlkKSAmJiB7IGlucHV0OiBbInRleHQiLCAiaW1hZ2UiXSB9KSwKCQkJCX0pLAoJCQkpOwoJCQljb250aW51ZTsKCQl9CgkJY29uc3QgaWQgPSB0eXBlb2YgbSA9PT0gInN0cmluZyIgPyBtIDogU3RyaW5nKG0uaWQgPz8gbS5uYW1lID8/ICIiKTsKCQlpZiAoIWlkKSBjb250aW51ZTsKCQlpZiAodHlwZW9mIG0gPT09ICJzdHJpbmciKSB7CgkJCW1vZGVscy5wdXNoKHsgaWQgfSk7CgkJCWNvbnRpbnVlOwoJCX0KCQltb2RlbHMucHVzaChjbGVhbk1vZGVsKHsgaWQsIG5hbWU6IG0uZGlzcGxheV9uYW1lIHx8IChtLm5hbWUgIT09IGlkID8gbS5uYW1lIDogdW5kZWZpbmVkKSwgLi4uY2FwYWJpbGl0aWVzT2YobSkgfSkpOwoJfQoJaWYgKCFtb2RlbHMubGVuZ3RoKSB0aHJvdyBuZXcgRXJyb3IoIlRoZSBlbmRwb2ludCByZXR1cm5lZCBubyBtb2RlbHMiKTsKCXJldHVybiBtb2RlbHMuc29ydCgoYSwgYikgPT4gYS5pZC5sb2NhbGVDb21wYXJlKGIuaWQpKTsKfQo=
+/**
+ * Custom model providers: any OpenAI-, Anthropic- or Google-compatible endpoint
+ * the user adds with a base URL and an API key (proxies, Ollama, LM Studio,
+ * vLLM, ...).
+ *
+ * The app keeps them in its own encrypted store and writes pi's models.json
+ * from it. models.json only references each key as `$ANDROPI_PROVIDER_KEY_<ID>`,
+ * which pi resolves from the environment, so keys never sit there in plain
+ * text. Providers in models.json that the app did not add are left untouched.
+ */
+
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readSecureJson, writeSecureJson } from "./secure.js";
+
+export const APIS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
+export type ProviderApi = (typeof APIS)[number];
+
+export type CustomModel = {
+	id: string;
+	name?: string;
+	contextWindow?: number;
+	/** Longest reply the model can write, in tokens. */
+	maxTokens?: number;
+	/** Thinks before answering; the app then offers a thinking effort. */
+	reasoning?: boolean;
+	/** False when thinking can't be turned off (only effort levels, no "off"); true when the endpoint says it can. */
+	canDisableThinking?: boolean;
+	/** False when the endpoint says effort levels make no difference: thinking is just on (or off). */
+	effort?: boolean;
+	input?: string[];
+};
+
+/** A model as saved: only known fields, with sane types. */
+function cleanModel(m: any): CustomModel {
+	const num = (v: unknown) => (typeof v === "number" && v > 0 ? Math.round(v) : undefined);
+	return {
+		id: String(m.id ?? "").trim(),
+		...(typeof m.name === "string" && m.name.trim() && { name: m.name.trim() }),
+		...(num(m.contextWindow) && { contextWindow: num(m.contextWindow) }),
+		...(num(m.maxTokens) && { maxTokens: num(m.maxTokens) }),
+		...(m.reasoning === true && { reasoning: true }),
+		...(m.reasoning === true && typeof m.canDisableThinking === "boolean" && { canDisableThinking: m.canDisableThinking }),
+		...(m.reasoning === true && m.effort === false && { effort: false }),
+		...(Array.isArray(m.input) && m.input.includes("image") && { input: ["text", "image"] }),
+	};
+}
+
+export type CustomProvider = {
+	id: string;
+	name: string;
+	api: ProviderApi;
+	baseUrl: string;
+	apiKey: string;
+	models: CustomModel[];
+};
+
+/** Local servers ignore the key, but pi only lists models whose provider has one. */
+const NO_KEY = "none";
+
+function envName(id: string) {
+	return `ANDROPI_PROVIDER_KEY_${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+}
+
+function cleanUrl(url: string) {
+	return url.trim().replace(/\/+$/, "");
+}
+
+export class CustomProviders {
+	private providers: CustomProvider[];
+
+	constructor(
+		private readonly storeFile: string,
+		private readonly modelsFile: string,
+	) {
+		this.providers = readSecureJson<CustomProvider[]>(storeFile, []);
+		// models.json is derived from the store, but how an entry is generated
+		// changes across app versions (e.g. the thinking-level map). Rewrite the
+		// app-managed entries whenever the file on disk differs from what this
+		// build would write, so an app update heals a stale file without the
+		// user re-saving a provider; providers the app did not add are left
+		// untouched, as in writeModelsJson. A hand-broken file is left alone
+		// here; saving a provider still surfaces the parse error.
+		try {
+			const text = this.modelsJsonText([]);
+			if (!existsSync(this.modelsFile) || readFileSync(this.modelsFile, "utf8") !== text) {
+				writeFileSync(this.modelsFile, text);
+			}
+		} catch {
+			// models.json is not valid JSON; leave it untouched.
+		}
+	}
+
+	ids() {
+		return new Set(this.providers.map((p) => p.id));
+	}
+
+	/** What the app shows; keys are never sent back. */
+	list() {
+		return this.providers.map(({ apiKey, ...rest }) => ({ ...rest, hasKey: !!apiKey }));
+	}
+
+	/** Exposes the keys to pi; call before the model runtime (re)loads models.json. */
+	applyEnv() {
+		for (const p of this.providers) process.env[envName(p.id)] = p.apiKey || NO_KEY;
+	}
+
+	/**
+	 * Adds or updates a provider. An empty apiKey keeps the saved one.
+	 * `builtin` holds provider ids pi already knows, which a new provider may not reuse.
+	 */
+	save(input: Partial<CustomProvider> & { previousId?: string }, builtin: Set<string>) {
+		const id = String(input.id ?? "").trim();
+		if (!/^[a-z0-9][a-z0-9_-]*$/.test(id)) throw new Error("Provider ID: lowercase letters, digits, - and _ only");
+		const api = input.api as ProviderApi;
+		if (!APIS.includes(api)) throw new Error(`Unknown API type ${input.api}`);
+		const baseUrl = cleanUrl(String(input.baseUrl ?? ""));
+		if (!/^https?:\/\/[^/]+/.test(baseUrl)) throw new Error("Enter a full base URL (https://…)");
+		const models = (input.models ?? [])
+			.map(cleanModel)
+			.filter((m, i, all) => m.id && all.findIndex((x) => x.id === m.id) === i);
+		if (!models.length) throw new Error("Add at least one model (or fetch them from the endpoint)");
+
+		const previousId = input.previousId ?? id;
+		const previous = this.providers.find((p) => p.id === previousId);
+		if (id !== previousId && this.providers.some((p) => p.id === id)) throw new Error(`${id} already exists`);
+		if (!this.ids().has(id) && builtin.has(id)) throw new Error(`${id} is a built-in provider; pick another ID`);
+
+		const provider: CustomProvider = {
+			id,
+			name: String(input.name ?? "").trim() || id,
+			api,
+			baseUrl,
+			apiKey: String(input.apiKey ?? "").trim() || previous?.apiKey || "",
+			models,
+		};
+		this.providers = [...this.providers.filter((p) => p.id !== previousId), provider];
+		this.persist(previousId === id ? [] : [previousId]);
+		return provider;
+	}
+
+	remove(id: string) {
+		this.providers = this.providers.filter((p) => p.id !== id);
+		this.persist([id]);
+	}
+
+	/** The stored key for a provider, so "Fetch models" works without retyping it. */
+	key(id: string) {
+		return this.providers.find((p) => p.id === id)?.apiKey ?? "";
+	}
+
+	private persist(removed: string[]) {
+		writeSecureJson(this.storeFile, this.providers);
+		for (const id of removed) delete process.env[envName(id)];
+		this.applyEnv();
+		this.writeModelsJson(removed);
+	}
+
+	private writeModelsJson(removed: string[]) {
+		writeFileSync(this.modelsFile, this.modelsJsonText(removed));
+	}
+
+	/** The models.json content this build writes for the current store. */
+	private modelsJsonText(removed: string[]): string {
+		let config: { providers?: Record<string, unknown>; [key: string]: unknown } = {};
+		if (existsSync(this.modelsFile)) {
+			// Never overwrite a models.json the user wrote by hand if it cannot be read.
+			try {
+				config = JSON.parse(readFileSync(this.modelsFile, "utf8"));
+			} catch (e) {
+				throw new Error(`models.json is not valid JSON, fix or delete it first: ${(e as Error).message}`);
+			}
+		}
+		const providers = { ...(config.providers ?? {}) };
+		for (const id of removed) delete providers[id];
+		for (const p of this.providers) {
+			providers[p.id] = {
+				name: p.name,
+				baseUrl: p.baseUrl,
+				api: p.api,
+				apiKey: `$${envName(p.id)}`,
+				models: p.models.map((m) => ({
+					id: m.id,
+					...(m.name ? { name: m.name } : {}),
+					...(m.contextWindow ? { contextWindow: m.contextWindow } : {}),
+					...(m.maxTokens ? { maxTokens: requestedOutput(m) } : {}),
+					...(m.reasoning ? { reasoning: true, thinkingLevelMap: thinkingLevels(m, p.api) } : {}),
+					...(m.input?.length ? { input: m.input } : {}),
+				})),
+			};
+		}
+		return JSON.stringify({ ...config, providers }, null, 2);
+	}
+}
+
+/**
+ * What a `/models` entry says about a model, across the shapes endpoints use: a `capabilities` object
+ * (OpenAI-style proxies), OpenRouter's `architecture` / `supported_parameters` / `top_provider`, and plain
+ * `context_window` / `max_output_tokens` fields. Unknown stays unknown.
+ */
+export function capabilitiesOf(m: any): Omit<CustomModel, "id" | "name"> {
+	// A capabilities object, or a list of names (["vision", "thinking"]).
+	const list: string[] = Array.isArray(m.capabilities) ? m.capabilities.map((c: unknown) => String(c).toLowerCase()) : [];
+	const caps = m.capabilities && typeof m.capabilities === "object" && !Array.isArray(m.capabilities) ? m.capabilities : {};
+	const limits = caps.limits ?? {};
+	const supports = caps.supports ?? {};
+	// Numbers, or numeric strings; never booleans (Number(true) is 1).
+	const num = (v: unknown) => {
+		const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+		return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+	};
+	const first = (...values: unknown[]) => values.map(num).find((v) => v !== undefined);
+	const flag = (...values: unknown[]) => values.find((v) => typeof v === "boolean") as boolean | undefined;
+	const params: string[] = Array.isArray(m.supported_parameters) ? m.supported_parameters : [];
+	const modalities: string[] = m.architecture?.input_modalities ?? m.input_modalities ?? m.modalities?.input ?? [];
+
+	// An explicit yes or no wins over hints such as supported parameters.
+	const reasoning =
+		flag(caps.reasoning, caps.thinking, supports.reasoning, supports.thinking, m.reasoning) ??
+		(list.includes("reasoning") ||
+			list.includes("thinking") ||
+			params.includes("reasoning") ||
+			params.includes("include_reasoning") ||
+			params.includes("reasoning_effort"));
+	const vision =
+		flag(caps.vision, supports.vision, m.vision) ??
+		(list.includes("vision") || list.includes("image") || m.type === "vlm" || modalities.includes?.("image"));
+
+	// The prompt limit, when smaller, is what actually fits (a proxy may refuse prompts past it).
+	const context = first(
+		caps.contextWindow,
+		caps.context_window,
+		limits.max_context_window_tokens,
+		m.context_window,
+		m.context_length,
+		m.max_context_window_tokens,
+		m.max_context_length,
+		m.top_provider?.context_length,
+	);
+	const prompt = first(m.max_input_tokens, m.max_prompt_tokens, limits.max_prompt_tokens, caps.maxInput);
+	const contextWindow = context && prompt ? Math.min(context, prompt) : (context ?? prompt);
+
+	const canDisable = flag(caps.thinkingCanDisable, caps.reasoningCanDisable);
+	return {
+		contextWindow,
+		maxTokens: first(
+			caps.maxOutput,
+			caps.max_output_tokens,
+			limits.max_output_tokens,
+			m.max_output_tokens,
+			m.max_completion_tokens,
+			m.top_provider?.max_completion_tokens,
+		),
+		...(reasoning && { reasoning: true }),
+		...(reasoning && canDisable !== undefined && { canDisableThinking: canDisable }),
+		...(reasoning && flag(caps.thinkingEffortSupported, caps.reasoningEffortSupported) === false && { effort: false }),
+		...(vision && { input: ["text", "image"] }),
+	};
+}
+
+/**
+ * The reply size pi asks for on every request (max_tokens). The model's full limit (up to 393k on some) would make
+ * every request reserve that much: slow on some servers, and refused by credit checks on others. 32k leaves room
+ * for long answers and thinking; the full limit is still shown in the app.
+ */
+function requestedOutput(m: CustomModel) {
+	const limits = [m.maxTokens!, 32_768];
+	if (m.contextWindow) limits.push(Math.floor(m.contextWindow / 4));
+	return Math.max(1024, Math.min(...limits));
+}
+
+/**
+ * Which of pi's thinking levels a custom reasoning model offers. "minimal" is an OpenAI-only effort, so it is off
+ * the list; models that always think lose "off". When the endpoint says thinking can be turned off, "off" is
+ * sent explicitly as reasoning_effort "none" on OpenAI-style APIs, rather than leaving the model at its default.
+ * The full low/medium/high ladder stays available even when the endpoint claims effort is unsupported: some
+ * catalogs use that flag for "not advertised", while their endpoints accept the standard effort values (medium
+ * already goes out on every request). pi only offers xhigh ("Max" in the app) when the map names the level, so
+ * OpenAI-style APIs map it explicitly.
+ */
+function thinkingLevels(m: CustomModel, api: ProviderApi) {
+	const map: Record<string, string | null> = { minimal: null };
+	if (m.canDisableThinking === false) map.off = null;
+	else if (m.canDisableThinking === true && api.startsWith("openai")) map.off = "none";
+	if (api.startsWith("openai")) map.xhigh = "xhigh";
+	return map;
+}
+
+/** Asks the endpoint which models it serves (`GET …/models`). */
+export async function fetchModels(api: ProviderApi, baseUrl: string, apiKey: string): Promise<CustomModel[]> {
+	const base = cleanUrl(baseUrl);
+	if (!/^https?:\/\/[^/]+/.test(base)) throw new Error("Enter a full base URL (https://…)");
+	const headers: Record<string, string> = { accept: "application/json" };
+	let url = `${base}/models`;
+	if (api === "anthropic-messages") {
+		// pi's Anthropic base URL has no /v1; accept either form here.
+		if (!/\/v1$/.test(base)) url = `${base}/v1/models?limit=1000`;
+		if (apiKey) headers["x-api-key"] = apiKey;
+		headers["anthropic-version"] = "2023-06-01";
+	} else if (api === "google-generative-ai") {
+		url = `${base}/models?pageSize=1000`;
+		if (apiKey) headers["x-goog-api-key"] = apiKey;
+	} else if (apiKey) {
+		headers.authorization = `Bearer ${apiKey}`;
+	}
+
+	const res = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
+	const body = await res.text();
+	if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${body.slice(0, 300)}`);
+	let json: any;
+	try {
+		json = JSON.parse(body);
+	} catch {
+		throw new Error(`The endpoint did not return JSON: ${body.slice(0, 200)}`);
+	}
+
+	const items: any[] = Array.isArray(json) ? json : (json.data ?? json.models ?? []);
+	const models: CustomModel[] = [];
+	for (const m of items) {
+		if (api === "google-generative-ai") {
+			if (Array.isArray(m.supportedGenerationMethods) && !m.supportedGenerationMethods.includes("generateContent"))
+				continue;
+			const id = String(m.name ?? "").replace(/^models\//, "");
+			if (!id) continue;
+			models.push(
+				cleanModel({
+					id,
+					name: m.displayName,
+					contextWindow: m.inputTokenLimit,
+					maxTokens: m.outputTokenLimit,
+					reasoning: m.thinking === true,
+					// Gemini chat models all take images.
+					...(/^gemini/.test(id) && { input: ["text", "image"] }),
+				}),
+			);
+			continue;
+		}
+		const id = typeof m === "string" ? m : String(m.id ?? m.name ?? "");
+		if (!id) continue;
+		if (typeof m === "string") {
+			models.push({ id });
+			continue;
+		}
+		models.push(cleanModel({ id, name: m.display_name || (m.name !== id ? m.name : undefined), ...capabilitiesOf(m) }));
+	}
+	if (!models.length) throw new Error("The endpoint returned no models");
+	return models.sort((a, b) => a.id.localeCompare(b.id));
+}
