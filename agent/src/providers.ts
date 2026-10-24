@@ -73,6 +73,21 @@ export class CustomProviders {
 		private readonly modelsFile: string,
 	) {
 		this.providers = readSecureJson<CustomProvider[]>(storeFile, []);
+		// models.json is derived from the store, but how an entry is generated
+		// changes across app versions (e.g. the thinking-level map). Rewrite the
+		// app-managed entries whenever the file on disk differs from what this
+		// build would write, so an app update heals a stale file without the
+		// user re-saving a provider; providers the app did not add are left
+		// untouched, as in writeModelsJson. A hand-broken file is left alone
+		// here; saving a provider still surfaces the parse error.
+		try {
+			const text = this.modelsJsonText([]);
+			if (!existsSync(this.modelsFile) || readFileSync(this.modelsFile, "utf8") !== text) {
+				writeFileSync(this.modelsFile, text);
+			}
+		} catch {
+			// models.json is not valid JSON; leave it untouched.
+		}
 	}
 
 	ids() {
@@ -141,6 +156,11 @@ export class CustomProviders {
 	}
 
 	private writeModelsJson(removed: string[]) {
+		writeFileSync(this.modelsFile, this.modelsJsonText(removed));
+	}
+
+	/** The models.json content this build writes for the current store. */
+	private modelsJsonText(removed: string[]): string {
 		let config: { providers?: Record<string, unknown>; [key: string]: unknown } = {};
 		if (existsSync(this.modelsFile)) {
 			// Never overwrite a models.json the user wrote by hand if it cannot be read.
@@ -168,7 +188,7 @@ export class CustomProviders {
 				})),
 			};
 		}
-		writeFileSync(this.modelsFile, JSON.stringify({ ...config, providers }, null, 2));
+		return JSON.stringify({ ...config, providers }, null, 2);
 	}
 }
 
@@ -250,18 +270,18 @@ function requestedOutput(m: CustomModel) {
 
 /**
  * Which of pi's thinking levels a custom reasoning model offers. "minimal" is an OpenAI-only effort, so it is off
- * the list; models that always think lose "off"; models whose effort makes no difference keep a single level (plus
- * off), which the app shows as on/off or not at all. When the endpoint says thinking can be turned off, "off" is
+ * the list; models that always think lose "off". When the endpoint says thinking can be turned off, "off" is
  * sent explicitly as reasoning_effort "none" on OpenAI-style APIs, rather than leaving the model at its default.
+ * The full low/medium/high ladder stays available even when the endpoint claims effort is unsupported: some
+ * catalogs use that flag for "not advertised", while their endpoints accept the standard effort values (medium
+ * already goes out on every request). pi only offers xhigh ("Max" in the app) when the map names the level, so
+ * OpenAI-style APIs map it explicitly.
  */
 function thinkingLevels(m: CustomModel, api: ProviderApi) {
 	const map: Record<string, string | null> = { minimal: null };
 	if (m.canDisableThinking === false) map.off = null;
 	else if (m.canDisableThinking === true && api.startsWith("openai")) map.off = "none";
-	if (m.effort === false) {
-		map.low = null;
-		map.high = null;
-	}
+	if (api.startsWith("openai")) map.xhigh = "xhigh";
 	return map;
 }
 
